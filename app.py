@@ -4,32 +4,16 @@ from datetime import datetime
 from functools import wraps
 
 import boto3
+import pymysql
 from botocore.exceptions import ClientError
-from flask import (
-    Flask,
-    flash,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
 
 # ---------------------------------------------------------------------------
 # App setup & AWS Configuration
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = "eventhub-secret-key-change-in-production"
-
-# AWS RDS Configuration
-# Format: mysql+pymysql://<username>:<password>@<rds-endpoint>:<port>/<dbname>
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://admin:yourpassword@your-rds-endpoint.amazonaws.com:3306/eventhub_db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
 
 # AWS S3 Configuration
 S3_BUCKET_NAME = "your-s3-bucket-name"
@@ -40,34 +24,58 @@ ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg"}
 def _allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# AWS RDS Configuration (pymysql)
+DB_HOST = "your-rds-endpoint.amazonaws.com"
+DB_USER = "admin"
+DB_PASS = "yourpassword"
+DB_NAME = "eventhub_db"
+
+def get_db_connection():
+    """Establish and return a connection to the RDS MySQL database."""
+    return pymysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASS,
+        database=DB_NAME,
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
 # ---------------------------------------------------------------------------
-# Database Models
+# Initialize Tables (Run once to set up RDS)
 # ---------------------------------------------------------------------------
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+def init_db():
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(120) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id VARCHAR(50) PRIMARY KEY,
+                title VARCHAR(150) NOT NULL,
+                description TEXT,
+                date VARCHAR(50)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS registrations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                email VARCHAR(120) NOT NULL,
+                event_id VARCHAR(50) NOT NULL,
+                registered_at DATETIME NOT NULL,
+                file_uploaded VARCHAR(255)
+            )
+        """)
+    conn.commit()
+    conn.close()
 
-class Event(db.Model):
-    __tablename__ = 'events'
-    id = db.Column(db.String(50), primary_key=True)
-    title = db.Column(db.String(150), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    date = db.Column(db.String(50), nullable=True)
-
-class Registration(db.Model):
-    __tablename__ = 'registrations'
-    id = db.Column(db.Integer, primary_key=True)
-    user_email = db.Column(db.String(120), db.ForeignKey('users.email'), nullable=False)
-    event_id = db.Column(db.String(50), db.ForeignKey('events.id'), nullable=False)
-    registered_at = db.Column(db.DateTime, default=datetime.utcnow)
-    file_uploaded = db.Column(db.String(255), nullable=True) # Stores the S3 Object Key
-
-# Create tables if they don't exist
-with app.app_context():
-    db.create_all()
+# Initialize tables when app starts
+init_db()
 
 # ---------------------------------------------------------------------------
 # Auth decorator
@@ -103,11 +111,15 @@ def login():
             flash("Please fill in all fields.", "danger")
             return redirect(url_for("login"))
 
-        user = User.query.filter_by(email=email).first()
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
+            user = cursor.fetchone()
+        conn.close()
 
-        if user and check_password_hash(user.password_hash, password):
-            session["user"] = {"name": user.name, "email": user.email}
-            flash(f"Welcome back, {user.name}!", "success")
+        if user:
+            session["user"] = {"name": user["name"], "email": user["email"]}
+            flash(f"Welcome back, {user['name']}!", "success")
             return redirect(url_for("dashboard"))
         else:
             flash("Invalid email or password.", "danger")
@@ -137,15 +149,17 @@ def register():
             flash("Password must be at least 6 characters.", "danger")
             return redirect(url_for("register"))
 
-        existing_user = User.query.filter_by(email=email).first()
-        if existing_user:
-            flash("An account with that email already exists.", "danger")
-            return redirect(url_for("register"))
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+            if cursor.fetchone():
+                flash("An account with that email already exists.", "danger")
+                conn.close()
+                return redirect(url_for("register"))
 
-        hashed_pw = generate_password_hash(password)
-        new_user = User(name=name, email=email, password_hash=hashed_pw)
-        db.session.add(new_user)
-        db.session.commit()
+            cursor.execute("INSERT INTO users (name, email, password) VALUES (%s, %s, %s)", (name, email, password))
+            conn.commit()
+        conn.close()
         
         flash("Account created successfully! Please log in.", "success")
         return redirect(url_for("login"))
@@ -166,30 +180,28 @@ def logout():
 def dashboard():
     user_email = session["user"]["email"]
     
-    events = Event.query.all()
-    user_regs = Registration.query.filter_by(user_email=user_email).all()
-    user_reg_ids = [r.event_id for r in user_regs]
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT * FROM events")
+        events = cursor.fetchall()
+        
+        cursor.execute("SELECT event_id FROM registrations WHERE email = %s", (user_email,))
+        user_reg_ids = [row["event_id"] for row in cursor.fetchall()]
+    conn.close()
 
-    event_list = []
     for ev in events:
-        event_list.append({
-            "id": ev.id,
-            "title": ev.title,
-            "description": ev.description,
-            "date": ev.date,
-            "is_registered": ev.id in user_reg_ids
-        })
+        ev["is_registered"] = ev["id"] in user_reg_ids
 
-    total_events = len(event_list)
+    total_events = len(events)
     registered_count = len(user_reg_ids)
     upcoming_count = total_events - registered_count
 
-    my_events = [ev for ev in event_list if ev["is_registered"]]
-    available_events = [ev for ev in event_list if not ev["is_registered"]]
+    my_events = [ev for ev in events if ev["is_registered"]]
+    available_events = [ev for ev in events if not ev["is_registered"]]
 
     return render_template(
         "dashboard.html",
-        events=event_list,
+        events=events,
         my_events=my_events,
         available_events=available_events,
         total_events=total_events,
@@ -207,15 +219,17 @@ def register_event():
         flash("Please select an event.", "danger")
         return redirect(url_for("dashboard"))
 
-    existing_reg = Registration.query.filter_by(user_email=user_email, event_id=event_id).first()
-    if existing_reg:
-        flash("You are already registered for this event.", "warning")
-        return redirect(url_for("dashboard"))
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT * FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
+        if cursor.fetchone():
+            flash("You are already registered for this event.", "warning")
+            conn.close()
+            return redirect(url_for("dashboard"))
 
     file_name = None
     file = request.files.get("student_id")
     
-    # AWS S3 Upload Logic
     if file and file.filename:
         if _allowed_file(file.filename):
             original_fname = secure_filename(file.filename)
@@ -223,7 +237,6 @@ def register_event():
             file_name = f"{timestamp}_{original_fname}"
             
             try:
-                # Upload directly to S3 Bucket
                 s3_client.upload_fileobj(
                     file,
                     S3_BUCKET_NAME,
@@ -238,13 +251,17 @@ def register_event():
             flash("Invalid file type. Only PDF, PNG, and JPG are allowed.", "danger")
             return redirect(url_for("dashboard"))
 
-    # Save to RDS
-    new_reg = Registration(user_email=user_email, event_id=event_id, file_uploaded=file_name)
-    db.session.add(new_reg)
-    db.session.commit()
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "INSERT INTO registrations (email, event_id, registered_at, file_uploaded) VALUES (%s, %s, %s, %s)",
+            (user_email, event_id, datetime.now(), file_name)
+        )
+        cursor.execute("SELECT title FROM events WHERE id = %s", (event_id,))
+        event = cursor.fetchone()
+        conn.commit()
+    conn.close()
 
-    event = Event.query.get(event_id)
-    event_title = event.title if event else "the event"
+    event_title = event["title"] if event else "the event"
     flash(f"Successfully registered for {event_title}!", "success")
     return redirect(url_for("dashboard"))
 
@@ -253,21 +270,22 @@ def register_event():
 def leave_event(event_id):
     user_email = session["user"]["email"]
     
-    reg_to_delete = Registration.query.filter_by(user_email=user_email, event_id=event_id).first()
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT * FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
+        reg_to_delete = cursor.fetchone()
 
-    if not reg_to_delete:
-        flash("You are not registered for that event.", "warning")
-    else:
-        # Optional: You could also delete the file from S3 here if you want to save storage space
-        # if reg_to_delete.file_uploaded:
-        #     s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=reg_to_delete.file_uploaded)
-
-        db.session.delete(reg_to_delete)
-        db.session.commit()
-        
-        event = Event.query.get(event_id)
-        event_title = event.title if event else "the event"
-        flash(f"You have left {event_title}.", "info")
+        if not reg_to_delete:
+            flash("You are not registered for that event.", "warning")
+        else:
+            cursor.execute("DELETE FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
+            cursor.execute("SELECT title FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            conn.commit()
+            
+            event_title = event["title"] if event else "the event"
+            flash(f"You have left {event_title}.", "info")
+    conn.close()
 
     return redirect(url_for("dashboard"))
 

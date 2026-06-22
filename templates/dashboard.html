@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — EventHub{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg eh-navbar sticky-top">
+    <div class="container">
+        <a class="navbar-brand eh-navbar-brand" href="{{ url_for('dashboard') }}">
+            <i class="bi bi-calendar2-event-fill me-2"></i>EventHub
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <ul class="navbar-nav ms-auto align-items-center gap-2">
+                <li class="nav-item">
+                    <span class="nav-link eh-nav-user">
+                        <span class="eh-avatar">{{ session['user']['name'][0] | upper }}</span>
+                        {{ session['user']['name'] }}
+                    </span>
+                </li>
+                <li class="nav-item">
+                    <a class="btn btn-outline-dark btn-sm eh-logout-btn" href="{{ url_for('logout') }}" id="logoutBtn">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="eh-dashboard">
+    <div class="container py-4 py-lg-5">
+
+        <!-- Hero -->
+        <section class="eh-hero mb-5" id="heroSection">
+            <div class="row align-items-center">
+                <div class="col-lg-7">
+                    <p class="eh-hero-eyebrow">
+                        <i class="bi bi-lightning-charge-fill me-1"></i>Dashboard
+                    </p>
+                    <h1 class="eh-hero-title">
+                        Hey, <span class="text-accent">{{ session['user']['name'] }}</span>
+                    </h1>
+                    <p class="eh-hero-subtitle">Here's what's happening across your events.</p>
+                </div>
+                <div class="col-lg-5">
+                    <div class="row g-3 mt-3 mt-lg-0">
+                        <div class="col-4">
+                            <div class="eh-kpi-card" id="kpiTotal">
+                                <span class="eh-kpi-number">{{ total_events }}</span>
+                                <span class="eh-kpi-label">Total Events</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="eh-kpi-card kpi-accent" id="kpiRegistered">
+                                <span class="eh-kpi-number">{{ registered_count }}</span>
+                                <span class="eh-kpi-label">Registered</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="eh-kpi-card" id="kpiAvailable">
+                                <span class="eh-kpi-number">{{ upcoming_count }}</span>
+                                <span class="eh-kpi-label">Available</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pill Tabs -->
+        <ul class="nav nav-pills eh-pills mb-4" id="dashboardTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="allEventsTab" data-bs-toggle="pill" data-bs-target="#allEventsPane" type="button" role="tab" aria-controls="allEventsPane" aria-selected="true">
+                    <i class="bi bi-grid-3x3-gap-fill me-1"></i>All Events
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="registerTab" data-bs-toggle="pill" data-bs-target="#registerPane" type="button" role="tab" aria-controls="registerPane" aria-selected="false">
+                    <i class="bi bi-plus-circle-fill me-1"></i>Register
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="myEventsTab" data-bs-toggle="pill" data-bs-target="#myEventsPane" type="button" role="tab" aria-controls="myEventsPane" aria-selected="false">
+                    <i class="bi bi-bookmark-star-fill me-1"></i>My Events
+                    {% if registered_count > 0 %}
+                    <span class="badge bg-accent-badge ms-1">{{ registered_count }}</span>
+                    {% endif %}
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="dashboardTabContent">
+
+            <!-- TAB 1 — All Events -->
+            <div class="tab-pane fade show active" id="allEventsPane" role="tabpanel" aria-labelledby="allEventsTab">
+                <div class="row g-4">
+                    {% for event in events %}
+                    <div class="col-md-6 col-xl-4">
+                        <div class="eh-event-card {% if event.is_registered %}eh-event-registered{% endif %}" id="eventCard{{ event.id }}">
+                            <div class="eh-event-card-header">
+                                <span class="eh-event-category">{{ event.category }}</span>
+                                {% if event.is_registered %}
+                                <span class="eh-event-badge-registered"><i class="bi bi-check-circle-fill me-1"></i>Registered</span>
+                                {% endif %}
+                            </div>
+                            <h3 class="eh-event-title">{{ event.title }}</h3>
+                            <p class="eh-event-desc">{{ event.description }}</p>
+                            <div class="eh-event-meta">
+                                <span><i class="bi bi-calendar3 me-1"></i>{{ event.date }}</span>
+                                <span><i class="bi bi-geo-alt me-1"></i>{{ event.location }}</span>
+                            </div>
+                            <div class="eh-event-footer">
+                                <span class="eh-event-capacity"><i class="bi bi-people-fill me-1"></i>{{ event.capacity }} seats</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- TAB 2 — Register for Event -->
+            <div class="tab-pane fade" id="registerPane" role="tabpanel" aria-labelledby="registerTab">
+                {% if available_events %}
+                <div class="eh-register-card" id="registerFormCard">
+                    <div class="row">
+                        <div class="col-lg-7">
+                            <h3 class="eh-section-title">Register for an Event</h3>
+                            <p class="eh-section-subtitle">Select an event and optionally upload your student ID.</p>
+
+                            <form method="POST" action="{{ url_for('register_event') }}" enctype="multipart/form-data" id="eventRegForm">
+                                <div class="mb-4">
+                                    <label for="eventSelect" class="form-label fw-semibold">Choose Event</label>
+                                    <select class="form-select form-select-lg eh-select" name="event_id" id="eventSelect" required>
+                                        <option value="" disabled selected>— Select an event —</option>
+                                        {% for event in available_events %}
+                                        <option value="{{ event.id }}">{{ event.title }} — {{ event.date }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold">Student ID <span class="text-accent fw-semibold">*</span></label>
+                                    <div class="eh-file-drop" id="fileDropZone">
+                                        <input type="file" name="student_id" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" class="eh-file-input">
+                                        <div class="eh-file-drop-content" id="fileDropContent">
+                                            <i class="bi bi-cloud-arrow-up-fill eh-file-icon"></i>
+                                            <p class="eh-file-text">Drag & drop or <span class="text-accent fw-semibold">browse</span></p>
+                                            <p class="eh-file-hint">PDF, PNG, or JPG — max 5 MB</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" id="submitRegBtn" class="btn btn-accent btn-lg">
+                                    <i class="bi bi-check2-circle me-2"></i>Register Now
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-lg-5 d-none d-lg-flex align-items-center justify-content-center">
+                            <div class="eh-register-illustration">
+                                <i class="bi bi-ticket-perforated-fill"></i>
+                                <p>Select an event to get started</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="eh-empty-state" id="registerEmpty">
+                    <i class="bi bi-emoji-smile-fill eh-empty-icon"></i>
+                    <h3>You're all set!</h3>
+                    <p>You've registered for every available event. Check the <strong>My Events</strong> tab.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- TAB 3 — My Events -->
+            <div class="tab-pane fade" id="myEventsPane" role="tabpanel" aria-labelledby="myEventsTab">
+                {% if my_events %}
+                <div class="table-responsive eh-table-wrapper" id="myEventsTable">
+                    <table class="table eh-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Location</th>
+                                <th>Category</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in my_events %}
+                            <tr>
+                                <td><span class="eh-table-id">{{ event.id }}</span></td>
+                                <td class="fw-semibold">{{ event.title }}</td>
+                                <td><span class="eh-table-date"><i class="bi bi-calendar3 me-1"></i>{{ event.date }}</span></td>
+                                <td>{{ event.location }}</td>
+                                <td><span class="eh-category-pill">{{ event.category }}</span></td>
+                                <td>
+                                    <form action="{{ url_for('leave_event', event_id=event.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm eh-leave-btn" id="leaveBtn{{ event.id }}" onclick="return confirm('Leave {{ event.title }}?')">
+                                            <i class="bi bi-x-circle me-1"></i>Leave
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="eh-empty-state" id="myEventsEmpty">
+                    <i class="bi bi-calendar-x eh-empty-icon"></i>
+                    <h3>No events yet</h3>
+                    <p>Head to the <strong>Register</strong> tab and sign up for something exciting!</p>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

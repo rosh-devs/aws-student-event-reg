@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Register — EventHub{% endblock %}
+
+{% block content %}
+<section class="auth-page">
+    <div class="container-fluid min-vh-100 p-0">
+        <div class="row g-0 min-vh-100">
+
+            <!-- Left — Editorial Panel -->
+            <div class="col-lg-6 d-none d-lg-flex auth-side-panel">
+                <div class="auth-side-inner">
+                    <div class="auth-brand">
+                        <span class="brand-icon"><i class="bi bi-calendar2-event-fill"></i></span>
+                        <span class="brand-text">EventHub</span>
+                    </div>
+                    <h1 class="auth-headline">Join the<br>community.<br><span class="text-accent">Stand out.</span></h1>
+                    <p class="auth-subtext">Create your account and start registering for exciting events across campus. Your journey starts here.</p>
+                    <div class="auth-features">
+                        <div class="auth-feature">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                            <span>Instant registration</span>
+                        </div>
+                        <div class="auth-feature">
+                            <i class="bi bi-shield-check"></i>
+                            <span>Secure & private</span>
+                        </div>
+                        <div class="auth-feature">
+                            <i class="bi bi-bell-fill"></i>
+                            <span>Event notifications</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right — Register Form -->
+            <div class="col-lg-6 d-flex align-items-center justify-content-center auth-form-panel">
+                <div class="auth-form-wrapper">
+                    <!-- Mobile brand -->
+                    <div class="d-lg-none text-center mb-4">
+                        <span class="brand-icon-sm"><i class="bi bi-calendar2-event-fill"></i></span>
+                        <h2 class="brand-text-sm mt-2">EventHub</h2>
+                    </div>
+
+                    <h2 class="auth-form-title">Create an account</h2>
+                    <p class="auth-form-subtitle">Fill in your details to get started</p>
+
+                    <form method="POST" action="{{ url_for('register') }}" id="registerForm" autocomplete="off">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="regName" name="name" placeholder="Full Name" required>
+                            <label for="regName"><i class="bi bi-person me-2"></i>Full Name</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="email" class="form-control" id="regEmail" name="email" placeholder="name@example.com" required>
+                            <label for="regEmail"><i class="bi bi-envelope me-2"></i>Email address</label>
+                        </div>
+
+                        <div class="form-floating mb-4">
+                            <input type="password" class="form-control" id="regPassword" name="password" placeholder="Password" minlength="6" required>
+                            <label for="regPassword"><i class="bi bi-lock me-2"></i>Password (min 6 chars)</label>
+                        </div>
+
+                        <button type="submit" id="registerBtn" class="btn btn-accent w-100 btn-lg">
+                            Create Account <i class="bi bi-arrow-right ms-2"></i>
+                        </button>
+                    </form>
+
+                    <p class="auth-footer-text">
+                        Already have an account? <a href="{{ url_for('login') }}" class="auth-link">Sign in</a>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+{% endblock %}

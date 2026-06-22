@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Login — EventHub{% endblock %}
+
+{% block content %}
+<section class="auth-page">
+    <div class="container-fluid min-vh-100 p-0">
+        <div class="row g-0 min-vh-100">
+
+            <!-- Left — Editorial Panel -->
+            <div class="col-lg-6 d-none d-lg-flex auth-side-panel">
+                <div class="auth-side-inner">
+                    <div class="auth-brand">
+                        <span class="brand-icon"><i class="bi bi-calendar2-event-fill"></i></span>
+                        <span class="brand-text">EventHub</span>
+                    </div>
+                    <h1 class="auth-headline">Discover.<br>Register.<br><span class="text-accent">Participate.</span></h1>
+                    <p class="auth-subtext">Your one-stop dashboard for campus events — from hackathons to design challenges. Never miss an opportunity.</p>
+                    <div class="auth-stats">
+                        <div class="auth-stat">
+                            <span class="auth-stat-number">5</span>
+                            <span class="auth-stat-label">Live Events</span>
+                        </div>
+                        <div class="auth-stat">
+                            <span class="auth-stat-number">610+</span>
+                            <span class="auth-stat-label">Total Seats</span>
+                        </div>
+                        <div class="auth-stat">
+                            <span class="auth-stat-number">24/7</span>
+                            <span class="auth-stat-label">Access</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right — Login Form -->
+            <div class="col-lg-6 d-flex align-items-center justify-content-center auth-form-panel">
+                <div class="auth-form-wrapper">
+                    <!-- Mobile brand -->
+                    <div class="d-lg-none text-center mb-4">
+                        <span class="brand-icon-sm"><i class="bi bi-calendar2-event-fill"></i></span>
+                        <h2 class="brand-text-sm mt-2">EventHub</h2>
+                    </div>
+
+                    <h2 class="auth-form-title">Welcome back</h2>
+                    <p class="auth-form-subtitle">Sign in to your EventHub account</p>
+
+                    <form method="POST" action="{{ url_for('login') }}" id="loginForm" autocomplete="off">
+                        <div class="form-floating mb-3">
+                            <input type="email" class="form-control" id="loginEmail" name="email" placeholder="name@example.com" required>
+                            <label for="loginEmail"><i class="bi bi-envelope me-2"></i>Email address</label>
+                        </div>
+
+                        <div class="form-floating mb-4">
+                            <input type="password" class="form-control" id="loginPassword" name="password" placeholder="Password" required>
+                            <label for="loginPassword"><i class="bi bi-lock me-2"></i>Password</label>
+                        </div>
+
+                        <button type="submit" id="loginBtn" class="btn btn-accent w-100 btn-lg">
+                            Sign In <i class="bi bi-arrow-right ms-2"></i>
+                        </button>
+                    </form>
+
+                    <p class="auth-footer-text">
+                        Don't have an account? <a href="{{ url_for('register') }}" class="auth-link">Create one</a>
+                    </p>
+
+                    <div class="auth-demo-hint">
+                        <i class="bi bi-lightbulb me-1"></i>
+                        Demo account: <code>demo@eventhub.com</code> / <code>demo123</code>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+{% endblock %}

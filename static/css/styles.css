@@ -1,0 +1,863 @@
+/* ==========================================================================
+   EventHub — Design System
+   Palette: warm off-white, near-black ink, sharp orange accent
+   Typography: Plus Jakarta Sans (display/body) + JetBrains Mono (numbers/tags)
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   0. CSS Custom Properties
+   --------------------------------------------------------------------------- */
+:root {
+    /* Palette */
+    --eh-bg:          #f6f5f1;
+    --eh-bg-card:     #ffffff;
+    --eh-ink:         #1a1a1a;
+    --eh-ink-soft:    #555555;
+    --eh-ink-muted:   #999999;
+    --eh-accent:      #ff5b1f;
+    --eh-accent-hover:#e64e17;
+    --eh-accent-light:rgba(255, 91, 31, 0.08);
+    --eh-border:      #e8e7e3;
+    --eh-border-light:#f0efeb;
+    --eh-success:     #1a9e5c;
+    --eh-danger:      #dc3545;
+    --eh-side-dark:   #111111;
+    --eh-side-text:   #e0dfda;
+
+    /* Typography */
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Spacing */
+    --radius-sm:  8px;
+    --radius-md:  12px;
+    --radius-lg:  16px;
+    --radius-xl:  20px;
+    --radius-pill: 50px;
+
+    /* Shadows */
+    --shadow-sm:   0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md:   0 4px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-lg:   0 10px 30px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+    --shadow-accent: 0 4px 16px rgba(255, 91, 31, 0.25);
+
+    /* Transitions */
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   1. Base Reset & Globals
+   --------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-display);
+    font-weight: 400;
+    color: var(--eh-ink);
+    background-color: var(--eh-bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+    background: var(--eh-accent);
+    color: #fff;
+}
+
+a {
+    color: var(--eh-accent);
+    text-decoration: none;
+    transition: var(--transition);
+}
+a:hover {
+    color: var(--eh-accent-hover);
+}
+
+code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--eh-accent-light);
+    color: var(--eh-accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   2. Utility Classes
+   --------------------------------------------------------------------------- */
+.text-accent  { color: var(--eh-accent) !important; }
+.bg-accent    { background-color: var(--eh-accent) !important; }
+.font-mono    { font-family: var(--font-mono) !important; }
+
+/* ---------------------------------------------------------------------------
+   3. Auth Pages — Split Screen
+   --------------------------------------------------------------------------- */
+.auth-page {
+    min-height: 100vh;
+}
+
+/* Left editorial panel */
+.auth-side-panel {
+    background: var(--eh-side-dark);
+    color: var(--eh-side-text);
+    position: relative;
+    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+}
+.auth-side-panel::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    right: -20%;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,91,31,0.15) 0%, transparent 70%);
+    pointer-events: none;
+}
+.auth-side-panel::after {
+    content: '';
+    position: absolute;
+    bottom: -15%;
+    left: -10%;
+    width: 350px;
+    height: 350px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,91,31,0.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.auth-side-inner {
+    position: relative;
+    z-index: 1;
+    padding: 4rem 3.5rem;
+    max-width: 520px;
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 3rem;
+}
+.brand-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-sm);
+    background: var(--eh-accent);
+    color: #fff;
+    font-size: 1.2rem;
+}
+.brand-text {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.auth-headline {
+    font-size: 3rem;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #fff;
+    letter-spacing: -0.03em;
+    margin-bottom: 1.5rem;
+}
+
+.auth-subtext {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--eh-side-text);
+    opacity: 0.8;
+    max-width: 380px;
+    margin-bottom: 2.5rem;
+}
+
+/* Auth features list */
+.auth-features {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.auth-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.95rem;
+    color: var(--eh-side-text);
+    opacity: 0.85;
+}
+.auth-feature i {
+    font-size: 1.1rem;
+    color: var(--eh-accent);
+}
+
+/* Right form panel */
+.auth-form-panel {
+    background: var(--eh-bg);
+    padding: 2rem;
+}
+
+.auth-form-wrapper {
+    width: 100%;
+    max-width: 420px;
+}
+
+.brand-icon-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--eh-accent);
+    color: #fff;
+    font-size: 1.4rem;
+}
+.brand-text-sm {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.auth-form-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.35rem;
+}
+.auth-form-subtitle {
+    color: var(--eh-ink-muted);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+}
+
+/* Form controls override */
+.auth-form-wrapper .form-control {
+    border: 1.5px solid var(--eh-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    padding: 0.85rem 1rem;
+    transition: var(--transition);
+    background: var(--eh-bg-card);
+}
+.auth-form-wrapper .form-control:focus {
+    border-color: var(--eh-accent);
+    box-shadow: 0 0 0 3px var(--eh-accent-light);
+}
+.auth-form-wrapper .form-floating > label {
+    font-size: 0.9rem;
+    color: var(--eh-ink-muted);
+}
+
+/* Accent button */
+.btn-accent {
+    background: var(--eh-accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.8rem 1.5rem;
+    transition: var(--transition);
+    letter-spacing: -0.01em;
+}
+.btn-accent:hover {
+    background: var(--eh-accent-hover);
+    color: #fff;
+    box-shadow: var(--shadow-accent);
+    transform: translateY(-1px);
+}
+.btn-accent:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.auth-footer-text {
+    text-align: center;
+    margin-top: 1.75rem;
+    font-size: 0.9rem;
+    color: var(--eh-ink-muted);
+}
+.auth-link {
+    color: var(--eh-accent);
+    font-weight: 600;
+}
+.auth-link:hover {
+    text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+   4. Navbar
+   --------------------------------------------------------------------------- */
+.eh-navbar {
+    background: rgba(246, 245, 241, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--eh-border);
+    padding: 0.65rem 0;
+}
+
+.eh-navbar-brand {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--eh-ink) !important;
+    letter-spacing: -0.02em;
+}
+.eh-navbar-brand i {
+    color: var(--eh-accent);
+}
+
+.eh-nav-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--eh-ink);
+}
+
+.eh-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--eh-accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.eh-logout-btn {
+    border-radius: var(--radius-pill);
+    font-weight: 500;
+    font-size: 0.82rem;
+    padding: 0.35rem 0.85rem;
+    transition: var(--transition);
+}
+.eh-logout-btn:hover {
+    background: var(--eh-ink);
+    color: #fff;
+    border-color: var(--eh-ink);
+}
+
+/* ---------------------------------------------------------------------------
+   5. Dashboard — Hero
+   --------------------------------------------------------------------------- */
+.eh-dashboard {
+    min-height: calc(100vh - 60px);
+}
+
+.eh-hero {
+    padding: 1.5rem 0 0;
+}
+
+.eh-hero-eyebrow {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--eh-accent);
+    margin-bottom: 0.5rem;
+}
+.eh-hero-eyebrow i {
+    font-size: 0.75rem;
+}
+
+.eh-hero-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    margin-bottom: 0.35rem;
+}
+
+.eh-hero-subtitle {
+    color: var(--eh-ink-muted);
+    font-size: 1rem;
+}
+
+/* KPI Cards */
+.eh-kpi-card {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+    opacity: 0;
+    transform: translateY(12px);
+}
+.eh-kpi-card.eh-kpi-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.eh-kpi-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+.eh-kpi-card.kpi-accent {
+    background: var(--eh-accent);
+    border-color: var(--eh-accent);
+    color: #fff;
+}
+.eh-kpi-card.kpi-accent .eh-kpi-label {
+    color: rgba(255,255,255,0.8);
+}
+
+.eh-kpi-number {
+    font-family: var(--font-mono);
+    font-size: 1.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.eh-kpi-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--eh-ink-muted);
+    font-weight: 500;
+}
+
+/* ---------------------------------------------------------------------------
+   6. Dashboard — Pill Tabs
+   --------------------------------------------------------------------------- */
+.eh-pills {
+    gap: 8px;
+    border-bottom: 1px solid var(--eh-border);
+    padding-bottom: 0;
+}
+
+.eh-pills .nav-link {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--eh-ink-muted);
+    border-radius: var(--radius-pill);
+    padding: 0.55rem 1.2rem;
+    transition: var(--transition);
+    border: 1.5px solid transparent;
+    margin-bottom: -1px;
+}
+.eh-pills .nav-link:hover {
+    color: var(--eh-ink);
+    background: var(--eh-accent-light);
+}
+.eh-pills .nav-link.active {
+    color: #fff;
+    background: var(--eh-ink);
+    border-color: var(--eh-ink);
+}
+
+.bg-accent-badge {
+    background: var(--eh-accent) !important;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+}
+
+/* ---------------------------------------------------------------------------
+   7. Event Cards
+   --------------------------------------------------------------------------- */
+.eh-event-card {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+    height: 100%;
+    opacity: 0;
+    transform: translateY(16px);
+}
+.eh-event-card.eh-card-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.eh-event-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-3px);
+    border-color: var(--eh-border-light);
+}
+
+.eh-event-card.eh-event-registered {
+    border-left: 3px solid var(--eh-accent);
+}
+
+.eh-event-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.eh-event-category {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--eh-accent);
+    background: var(--eh-accent-light);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+}
+
+.eh-event-badge-registered {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--eh-success);
+    display: flex;
+    align-items: center;
+}
+
+.eh-event-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.eh-event-desc {
+    font-size: 0.85rem;
+    color: var(--eh-ink-soft);
+    line-height: 1.6;
+    flex-grow: 1;
+    margin: 0;
+}
+
+.eh-event-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--eh-ink-muted);
+}
+.eh-event-meta i {
+    color: var(--eh-accent);
+}
+
+.eh-event-footer {
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--eh-border-light);
+}
+
+.eh-event-capacity {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--eh-ink-muted);
+}
+.eh-event-capacity i {
+    color: var(--eh-accent);
+}
+
+/* ---------------------------------------------------------------------------
+   8. Register Form Card
+   --------------------------------------------------------------------------- */
+.eh-register-card {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.eh-section-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.3rem;
+}
+.eh-section-subtitle {
+    color: var(--eh-ink-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.75rem;
+}
+
+.eh-select {
+    border: 1.5px solid var(--eh-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    transition: var(--transition);
+}
+.eh-select:focus {
+    border-color: var(--eh-accent);
+    box-shadow: 0 0 0 3px var(--eh-accent-light);
+}
+
+/* File drop zone */
+.eh-file-drop {
+    border: 2px dashed var(--eh-border);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    background: var(--eh-bg);
+}
+.eh-file-drop:hover,
+.eh-file-drop--active {
+    border-color: var(--eh-accent);
+    background: var(--eh-accent-light);
+}
+
+.eh-file-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.eh-file-icon {
+    font-size: 2rem;
+    color: var(--eh-ink-muted);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.eh-file-text {
+    font-size: 0.9rem;
+    color: var(--eh-ink-soft);
+    margin-bottom: 0.2rem;
+}
+
+.eh-file-hint {
+    font-size: 0.75rem;
+    color: var(--eh-ink-muted);
+    margin: 0;
+}
+
+/* Illustration placeholder */
+.eh-register-illustration {
+    text-align: center;
+    color: var(--eh-ink-muted);
+    opacity: 0.6;
+}
+.eh-register-illustration i {
+    font-size: 5rem;
+    display: block;
+    margin-bottom: 1rem;
+    color: var(--eh-accent);
+    opacity: 0.3;
+}
+.eh-register-illustration p {
+    font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+   9. My Events Table
+   --------------------------------------------------------------------------- */
+.eh-table-wrapper {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.eh-table {
+    margin: 0;
+    font-size: 0.9rem;
+}
+.eh-table thead {
+    background: #fafaf8;
+}
+.eh-table th {
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--eh-ink-muted);
+    border-bottom: 1px solid var(--eh-border);
+    padding: 0.9rem 1.25rem;
+}
+.eh-table td {
+    padding: 0.9rem 1.25rem;
+    border-bottom: 1px solid var(--eh-border-light);
+    vertical-align: middle;
+}
+.eh-table tbody tr {
+    transition: var(--transition);
+}
+.eh-table tbody tr:hover {
+    background: var(--eh-accent-light);
+}
+.eh-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.eh-table-id {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--eh-ink-muted);
+    background: var(--eh-bg);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.eh-table-date {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--eh-ink-soft);
+}
+.eh-table-date i {
+    color: var(--eh-accent);
+}
+
+.eh-category-pill {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--eh-accent);
+    background: var(--eh-accent-light);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+}
+
+.eh-leave-btn {
+    border-radius: var(--radius-pill);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.85rem;
+    transition: var(--transition);
+}
+.eh-leave-btn:hover {
+    background: var(--eh-danger);
+    color: #fff;
+    border-color: var(--eh-danger);
+    transform: translateY(-1px);
+}
+
+/* ---------------------------------------------------------------------------
+   10. Empty States
+   --------------------------------------------------------------------------- */
+.eh-empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.eh-empty-icon {
+    font-size: 3.5rem;
+    color: var(--eh-accent);
+    opacity: 0.4;
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.eh-empty-state h3 {
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.eh-empty-state p {
+    color: var(--eh-ink-muted);
+    font-size: 0.9rem;
+    max-width: 320px;
+    margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   11. Toast Overrides
+   --------------------------------------------------------------------------- */
+.toast {
+    font-family: var(--font-display);
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+}
+
+/* ---------------------------------------------------------------------------
+   12. Scroll & Reveal Animations
+   --------------------------------------------------------------------------- */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.eh-hero {
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.eh-pills {
+    animation: fadeInUp 0.6s ease-out 0.15s both;
+}
+
+.tab-content {
+    animation: fadeInUp 0.5s ease-out 0.25s both;
+}
+
+/* ---------------------------------------------------------------------------
+   13. Responsive
+   --------------------------------------------------------------------------- */
+@media (max-width: 991.98px) {
+    .auth-form-panel {
+        padding: 2rem 1.5rem;
+    }
+    .eh-hero-title {
+        font-size: 1.7rem;
+    }
+    .eh-register-card {
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .eh-kpi-card {
+        padding: 1rem 0.75rem;
+    }
+    .eh-kpi-number {
+        font-size: 1.35rem;
+    }
+    .eh-event-card {
+        padding: 1.15rem;
+    }
+    .eh-pills .nav-link {
+        font-size: 0.8rem;
+        padding: 0.45rem 0.9rem;
+    }
+    .eh-table th,
+    .eh-table td {
+        padding: 0.7rem 0.8rem;
+    }
+}

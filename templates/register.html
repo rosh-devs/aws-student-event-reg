@@ -44,7 +44,7 @@
                     <h2 class="auth-form-title">Create an account</h2>
                     <p class="auth-form-subtitle">Fill in your details to get started</p>
 
-                    <form method="POST" action="{{ url_for('register') }}" id="registerForm" autocomplete="off">
+                    <form method="POST" action="{{ url_for('register') }}" id="registerForm" autocomplete="off" enctype="multipart/form-data">
                         <div class="form-floating mb-3">
                             <input type="text" class="form-control" id="regName" name="name" placeholder="Full Name" required>
                             <label for="regName"><i class="bi bi-person me-2"></i>Full Name</label>
@@ -55,9 +55,36 @@
                             <label for="regEmail"><i class="bi bi-envelope me-2"></i>Email address</label>
                         </div>
 
-                        <div class="form-floating mb-4">
+                        <div class="form-floating mb-3">
                             <input type="password" class="form-control" id="regPassword" name="password" placeholder="Password" minlength="6" required>
                             <label for="regPassword"><i class="bi bi-lock me-2"></i>Password (min 6 chars)</label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="regStudentId" name="student_id" placeholder="Student ID" required>
+                            <label for="regStudentId"><i class="bi bi-card-heading me-2"></i>Student ID <span class="text-accent">*</span></label>
+                        </div>
+
+                        <div class="form-floating mb-3">
+                            <select class="form-select" id="regDepartment" name="department" required>
+                                <option value="" disabled selected>— Select Department —</option>
+                                {% for dept in departments %}
+                                <option value="{{ dept }}">{{ dept }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="regDepartment"><i class="bi bi-building me-2"></i>Department <span class="text-accent">*</span></label>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold" for="regStudentIdFile"><i class="bi bi-upload me-1"></i>Student ID Document <span class="text-accent">*</span></label>
+                            <div class="eh-file-drop" id="regFileDropZone">
+                                <input type="file" name="student_id_file" id="regFileInput" accept=".pdf,.png,.jpg,.jpeg" class="eh-file-input">
+                                <div class="eh-file-drop-content" id="regFileDropContent">
+                                    <i class="bi bi-cloud-arrow-up-fill eh-file-icon"></i>
+                                    <p class="eh-file-text">Drag & drop or <span class="text-accent fw-semibold">browse</span></p>
+                                    <p class="eh-file-hint">Upload your Student ID — PDF, PNG, or JPG</p>
+                                </div>
+                            </div>
                         </div>
 
                         <button type="submit" id="registerBtn" class="btn btn-accent w-100 btn-lg">

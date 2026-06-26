@@ -16,6 +16,7 @@
                     <span class="nav-link eh-nav-user">
                         <span class="eh-avatar">{{ session['user']['name'][0] | upper }}</span>
                         {{ session['user']['name'] }}
+                        <span class="eh-dept-badge">{{ session['user']['department'] }}</span>
                     </span>
                 </li>
                 <li class="nav-item">
@@ -128,9 +129,9 @@
                     <div class="row">
                         <div class="col-lg-7">
                             <h3 class="eh-section-title">Register for an Event</h3>
-                            <p class="eh-section-subtitle">Select an event and optionally upload your student ID.</p>
+                            <p class="eh-section-subtitle">Select an event you'd like to participate in.</p>
 
-                            <form method="POST" action="{{ url_for('register_event') }}" enctype="multipart/form-data" id="eventRegForm">
+                            <form method="POST" action="{{ url_for('register_event') }}" id="eventRegForm">
                                 <div class="mb-4">
                                     <label for="eventSelect" class="form-label fw-semibold">Choose Event</label>
                                     <select class="form-select form-select-lg eh-select" name="event_id" id="eventSelect" required>
@@ -139,18 +140,6 @@
                                         <option value="{{ event.id }}">{{ event.title }} — {{ event.date }}</option>
                                         {% endfor %}
                                     </select>
-                                </div>
-
-                                <div class="mb-4">
-                                    <label class="form-label fw-semibold">Student ID <span class="text-accent fw-semibold">*</span></label>
-                                    <div class="eh-file-drop" id="fileDropZone">
-                                        <input type="file" name="student_id" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" class="eh-file-input">
-                                        <div class="eh-file-drop-content" id="fileDropContent">
-                                            <i class="bi bi-cloud-arrow-up-fill eh-file-icon"></i>
-                                            <p class="eh-file-text">Drag & drop or <span class="text-accent fw-semibold">browse</span></p>
-                                            <p class="eh-file-hint">PDF, PNG, or JPG — max 5 MB</p>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <button type="submit" id="submitRegBtn" class="btn btn-accent btn-lg">

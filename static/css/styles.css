@@ -262,6 +262,26 @@ code {
     font-size: 0.9rem;
     color: var(--eh-ink-muted);
 }
+.auth-form-wrapper .form-select {
+    border: 1.5px solid var(--eh-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    padding: 0.85rem 1rem;
+    transition: var(--transition);
+    background-color: var(--eh-bg-card);
+}
+.auth-form-wrapper .form-select:focus {
+    border-color: var(--eh-accent);
+    box-shadow: 0 0 0 3px var(--eh-accent-light);
+}
+.auth-form-wrapper .form-label {
+    font-size: 0.9rem;
+    color: var(--eh-ink-soft);
+}
+.auth-form-wrapper .eh-file-drop {
+    margin-top: 0.25rem;
+}
 
 /* Accent button */
 .btn-accent {
@@ -355,6 +375,19 @@ code {
     background: var(--eh-ink);
     color: #fff;
     border-color: var(--eh-ink);
+}
+
+.eh-dept-badge {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--eh-accent);
+    background: var(--eh-accent-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    margin-left: 4px;
 }
 
 /* ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ S3_BUCKET_NAME = "your-s3-bucket-name"
 s3_client = boto3.client('s3')
 
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg"}
+ALLOWED_DEPARTMENTS = {"CSE", "ME", "CE", "EC", "AH", "EEE"}
 
 def _allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -51,7 +52,10 @@ def init_db():
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(100) NOT NULL,
                 email VARCHAR(120) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL
+                password VARCHAR(255) NOT NULL,
+                student_id VARCHAR(100) NOT NULL,
+                department VARCHAR(10) NOT NULL,
+                student_id_file VARCHAR(255)
             )
         """)
         cursor.execute("""
@@ -59,7 +63,10 @@ def init_db():
                 id VARCHAR(50) PRIMARY KEY,
                 title VARCHAR(150) NOT NULL,
                 description TEXT,
-                date VARCHAR(50)
+                date VARCHAR(50),
+                category VARCHAR(50),
+                location VARCHAR(150),
+                capacity INT
             )
         """)
         cursor.execute("""
@@ -118,7 +125,12 @@ def login():
         conn.close()
 
         if user:
-            session["user"] = {"name": user["name"], "email": user["email"]}
+            session["user"] = {
+                "name": user["name"],
+                "email": user["email"],
+                "student_id": user["student_id"],
+                "department": user["department"],
+            }
             flash(f"Welcome back, {user['name']}!", "success")
             return redirect(url_for("dashboard"))
         else:
@@ -136,8 +148,10 @@ def register():
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "").strip()
+        student_id = request.form.get("student_id", "").strip()
+        department = request.form.get("department", "").strip().upper()
 
-        if not name or not email or not password:
+        if not name or not email or not password or not student_id or not department:
             flash("All fields are required.", "danger")
             return redirect(url_for("register"))
 
@@ -149,22 +163,55 @@ def register():
             flash("Password must be at least 6 characters.", "danger")
             return redirect(url_for("register"))
 
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-            if cursor.fetchone():
-                flash("An account with that email already exists.", "danger")
-                conn.close()
+        if department not in ALLOWED_DEPARTMENTS:
+            flash("Please select a valid department.", "danger")
+            return redirect(url_for("register"))
+
+        # Handle Student ID file upload to S3
+        student_id_filename = None
+        file = request.files.get("student_id_file")
+
+        if file and file.filename:
+            if _allowed_file(file.filename):
+                original_fname = secure_filename(file.filename)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                student_id_filename = f"student_ids/{timestamp}_{original_fname}"
+
+                try:
+                    s3_client.upload_fileobj(
+                        file,
+                        S3_BUCKET_NAME,
+                        student_id_filename,
+                        ExtraArgs={'ContentType': file.content_type}
+                    )
+                except ClientError as e:
+                    print(f"S3 Upload Error: {e}")
+                    flash("There was an error uploading your Student ID. Please try again.", "danger")
+                    return redirect(url_for("register"))
+            else:
+                flash("Invalid file type. Only PDF, PNG, and JPG are allowed.", "danger")
                 return redirect(url_for("register"))
 
-            cursor.execute("INSERT INTO users (name, email, password) VALUES (%s, %s, %s)", (name, email, password))
-            conn.commit()
-        conn.close()
-        
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+                if cursor.fetchone():
+                    flash("An account with that email already exists.", "danger")
+                    return redirect(url_for("register"))
+
+                cursor.execute(
+                    "INSERT INTO users (name, email, password, student_id, department, student_id_file) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (name, email, password, student_id, department, student_id_filename)
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
         flash("Account created successfully! Please log in.", "success")
         return redirect(url_for("login"))
 
-    return render_template("register.html")
+    return render_template("register.html", departments=sorted(ALLOWED_DEPARTMENTS))
 
 @app.route("/logout")
 def logout():
@@ -220,50 +267,26 @@ def register_event():
         return redirect(url_for("dashboard"))
 
     conn = get_db_connection()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT * FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
-        if cursor.fetchone():
-            flash("You are already registered for this event.", "warning")
-            conn.close()
-            return redirect(url_for("dashboard"))
-
-    file_name = None
-    file = request.files.get("student_id")
-    
-    if file and file.filename:
-        if _allowed_file(file.filename):
-            original_fname = secure_filename(file.filename)
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            file_name = f"{timestamp}_{original_fname}"
-            
-            try:
-                s3_client.upload_fileobj(
-                    file,
-                    S3_BUCKET_NAME,
-                    file_name,
-                    ExtraArgs={'ContentType': file.content_type}
-                )
-            except ClientError as e:
-                print(f"S3 Upload Error: {e}")
-                flash("There was an error uploading your file. Please try again.", "danger")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
+            if cursor.fetchone():
+                flash("You are already registered for this event.", "warning")
                 return redirect(url_for("dashboard"))
-        else:
-            flash("Invalid file type. Only PDF, PNG, and JPG are allowed.", "danger")
-            return redirect(url_for("dashboard"))
 
-    with conn.cursor() as cursor:
-        cursor.execute(
-            "INSERT INTO registrations (email, event_id, registered_at, file_uploaded) VALUES (%s, %s, %s, %s)",
-            (user_email, event_id, datetime.now(), file_name)
-        )
-        cursor.execute("SELECT title FROM events WHERE id = %s", (event_id,))
-        event = cursor.fetchone()
-        conn.commit()
-    conn.close()
+            cursor.execute(
+                "INSERT INTO registrations (email, event_id, registered_at) VALUES (%s, %s, %s)",
+                (user_email, event_id, datetime.now())
+            )
+            cursor.execute("SELECT title FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            conn.commit()
 
-    event_title = event["title"] if event else "the event"
-    flash(f"Successfully registered for {event_title}!", "success")
-    return redirect(url_for("dashboard"))
+        event_title = event["title"] if event else "the event"
+        flash(f"Successfully registered for {event_title}!", "success")
+        return redirect(url_for("dashboard"))
+    finally:
+        conn.close()
 
 @app.route("/leave/<event_id>", methods=["POST"])
 @login_required

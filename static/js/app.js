@@ -13,13 +13,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // -----------------------------------------------------------------------
-    // 2. File Drop Zone UX
+    // 2. File Drop Zone UX — Reusable
     // -----------------------------------------------------------------------
-    const dropZone = document.getElementById("fileDropZone");
-    const fileInput = document.getElementById("fileInput");
-    const dropContent = document.getElementById("fileDropContent");
+    function initFileDropZone(dropZoneId, fileInputId, dropContentId) {
+        const dropZone = document.getElementById(dropZoneId);
+        const fileInput = document.getElementById(fileInputId);
+        const dropContent = document.getElementById(dropContentId);
 
-    if (dropZone && fileInput) {
+        if (!dropZone || !fileInput) return;
+
         // Click to open file picker
         dropZone.addEventListener("click", () => fileInput.click());
 
@@ -44,27 +46,31 @@ document.addEventListener("DOMContentLoaded", () => {
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 fileInput.files = files;
-                showFileName(files[0].name);
+                showFileName(dropContent, files[0].name);
             }
         });
 
         // Handle file input change
         fileInput.addEventListener("change", () => {
             if (fileInput.files.length > 0) {
-                showFileName(fileInput.files[0].name);
+                showFileName(dropContent, fileInput.files[0].name);
             }
         });
+    }
 
-        function showFileName(name) {
-            if (dropContent) {
-                dropContent.innerHTML = `
-                    <i class="bi bi-file-earmark-check-fill eh-file-icon text-accent"></i>
-                    <p class="eh-file-text fw-semibold">${name}</p>
-                    <p class="eh-file-hint">Click or drop to replace</p>
-                `;
-            }
+    function showFileName(dropContent, name) {
+        if (dropContent) {
+            dropContent.innerHTML = `
+                <i class="bi bi-file-earmark-check-fill eh-file-icon text-accent"></i>
+                <p class="eh-file-text fw-semibold">${name}</p>
+                <p class="eh-file-hint">Click or drop to replace</p>
+            `;
         }
     }
+
+    // Initialize file drop zones (dashboard + register page)
+    initFileDropZone("fileDropZone", "fileInput", "fileDropContent");
+    initFileDropZone("regFileDropZone", "regFileInput", "regFileDropContent");
 
     // -----------------------------------------------------------------------
     // 3. Animate KPI cards on scroll

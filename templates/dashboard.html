@@ -20,6 +20,16 @@
                     </span>
                 </li>
                 <li class="nav-item">
+                    <a class="btn btn-outline-dark btn-sm eh-logout-btn position-relative" href="{{ url_for('pending_invites') }}" id="ehInviteNavLink">
+                        <i class="bi bi-bell-fill me-1"></i>Invitations
+                        {% if pending_invite_count is defined and pending_invite_count > 0 %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-accent-badge" id="ehInviteBadge">
+                            {{ pending_invite_count }}
+                        </span>
+                        {% endif %}
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="btn btn-outline-dark btn-sm eh-logout-btn" href="{{ url_for('logout') }}" id="logoutBtn">
                         <i class="bi bi-box-arrow-right me-1"></i>Logout
                     </a>
@@ -102,7 +112,12 @@
                     <div class="col-md-6 col-xl-4">
                         <div class="eh-event-card {% if event.is_registered %}eh-event-registered{% endif %}" id="eventCard{{ event.id }}">
                             <div class="eh-event-card-header">
-                                <span class="eh-event-category">{{ event.category }}</span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="eh-event-category">{{ event.category }}</span>
+                                    {% if event.team_event %}
+                                    <span class="eh-team-badge"><i class="bi bi-people-fill me-1"></i>Team</span>
+                                    {% endif %}
+                                </div>
                                 {% if event.is_registered %}
                                 <span class="eh-event-badge-registered"><i class="bi bi-check-circle-fill me-1"></i>Registered</span>
                                 {% endif %}
@@ -137,7 +152,7 @@
                                     <select class="form-select form-select-lg eh-select" name="event_id" id="eventSelect" required>
                                         <option value="" disabled selected>— Select an event —</option>
                                         {% for event in available_events %}
-                                        <option value="{{ event.id }}">{{ event.title }} — {{ event.date }}</option>
+                                        <option value="{{ event.id }}" data-team="{{ event.team_event }}">{{ event.title }} — {{ event.date }}{% if event.team_event %} 👥{% endif %}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -145,6 +160,9 @@
                                 <button type="submit" id="submitRegBtn" class="btn btn-accent btn-lg">
                                     <i class="bi bi-check2-circle me-2"></i>Register Now
                                 </button>
+                                <a href="#" id="teamRegLink" class="btn btn-accent btn-lg d-none">
+                                    <i class="bi bi-people-fill me-2"></i>Register as Team
+                                </a>
                             </form>
                         </div>
                         <div class="col-lg-5 d-none d-lg-flex align-items-center justify-content-center">
@@ -188,11 +206,15 @@
                                 <td>{{ event.location }}</td>
                                 <td><span class="eh-category-pill">{{ event.category }}</span></td>
                                 <td>
+                                    {% if not event.is_team_reg %}
                                     <form action="{{ url_for('leave_event', event_id=event.id) }}" method="POST" class="d-inline">
                                         <button type="submit" class="btn btn-outline-danger btn-sm eh-leave-btn" id="leaveBtn{{ event.id }}" onclick="return confirm('Leave {{ event.title }}?')">
                                             <i class="bi bi-x-circle me-1"></i>Leave
                                         </button>
                                     </form>
+                                    {% else %}
+                                    <span class="eh-team-badge"><i class="bi bi-people-fill me-1"></i>Team</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -211,4 +233,30 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const select = document.getElementById('eventSelect');
+    const submitBtn = document.getElementById('submitRegBtn');
+    const teamLink = document.getElementById('teamRegLink');
+
+    if (select && submitBtn && teamLink) {
+        select.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            const isTeam = opt.dataset.team === 'True';
+
+            if (isTeam) {
+                submitBtn.classList.add('d-none');
+                teamLink.classList.remove('d-none');
+                teamLink.href = '/event/' + this.value + '/team-register';
+            } else {
+                submitBtn.classList.remove('d-none');
+                teamLink.classList.add('d-none');
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}

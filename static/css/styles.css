@@ -894,3 +894,633 @@ code {
         padding: 0.7rem 0.8rem;
     }
 }
+
+/* ===========================================================================
+   14. Team Up — Registration & Invitations
+   =========================================================================== */
+
+/* --- Team Event Badge on Event Cards --- */
+.eh-team-badge {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6f42c1;
+    background: rgba(111, 66, 193, 0.08);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* --- Team Register Page --- */
+.eh-team-page {
+    min-height: calc(100vh - 60px);
+}
+
+.eh-event-info-card {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+    border-left: 3px solid var(--eh-accent);
+}
+
+.eh-event-info-card .eh-event-title {
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+}
+
+.eh-event-info-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.85rem;
+    color: var(--eh-ink-muted);
+}
+
+.eh-event-info-meta i {
+    color: var(--eh-accent);
+    margin-right: 4px;
+}
+
+/* --- Team Slots --- */
+.eh-team-slots-card {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.eh-team-slots-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.eh-team-slots-header h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.eh-min-indicator {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.eh-min-indicator.eh-min-unmet {
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.08);
+}
+
+.eh-min-indicator.eh-min-met {
+    color: var(--eh-success);
+    background: rgba(26, 158, 92, 0.08);
+}
+
+.eh-team-slot {
+    background: var(--eh-bg);
+    border: 1.5px solid var(--eh-border);
+    border-radius: var(--radius-md);
+    padding: 1.15rem 1.25rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: var(--transition);
+}
+
+.eh-team-slot:hover {
+    border-color: var(--eh-accent);
+    box-shadow: var(--shadow-sm);
+}
+
+.eh-slot-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--eh-accent-light);
+    color: var(--eh-accent);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.eh-slot-leader .eh-slot-number {
+    background: var(--eh-accent);
+    color: #fff;
+}
+
+.eh-slot-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.eh-slot-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+}
+
+.eh-slot-detail {
+    font-size: 0.78rem;
+    color: var(--eh-ink-muted);
+}
+
+.eh-slot-status {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+}
+
+.eh-status-leader {
+    color: var(--eh-accent);
+    background: var(--eh-accent-light);
+}
+
+.eh-status-pending {
+    color: #d97706;
+    background: rgba(217, 119, 6, 0.08);
+}
+
+.eh-status-accepted {
+    color: var(--eh-success);
+    background: rgba(26, 158, 92, 0.08);
+}
+
+.eh-status-declined {
+    color: var(--eh-danger);
+    background: rgba(220, 53, 69, 0.08);
+}
+
+.eh-status-empty {
+    color: var(--eh-ink-muted);
+    background: var(--eh-bg);
+    border: 1.5px dashed var(--eh-border);
+}
+
+/* Slot countdown */
+.eh-slot-countdown {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #d97706;
+    margin-left: 8px;
+}
+
+/* Search input within slot */
+.eh-slot-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.eh-slot-search input {
+    border: 1.5px solid var(--eh-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-size: 0.88rem;
+    padding: 0.5rem 0.85rem;
+    flex: 1;
+    transition: var(--transition);
+    background: var(--eh-bg-card);
+}
+
+.eh-slot-search input:focus {
+    outline: none;
+    border-color: var(--eh-accent);
+    box-shadow: 0 0 0 3px var(--eh-accent-light);
+}
+
+.eh-slot-search .btn {
+    flex-shrink: 0;
+}
+
+/* Search results dropdown */
+.eh-search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--eh-bg-card);
+    border: 1.5px solid var(--eh-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+}
+
+.eh-search-dropdown.show {
+    display: block;
+}
+
+.eh-search-result {
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.88rem;
+    border-bottom: 1px solid var(--eh-border-light);
+}
+
+.eh-search-result:last-child {
+    border-bottom: none;
+}
+
+.eh-search-result:hover {
+    background: var(--eh-accent-light);
+}
+
+.eh-search-result-name {
+    font-weight: 600;
+}
+
+.eh-search-result-meta {
+    font-size: 0.75rem;
+    color: var(--eh-ink-muted);
+    font-family: var(--font-mono);
+}
+
+/* Team action buttons */
+.eh-team-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.eh-team-actions .btn {
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.7rem 1.5rem;
+    border-radius: var(--radius-sm);
+}
+
+.btn-confirm-team {
+    background: var(--eh-success);
+    color: #fff;
+    border: none;
+    transition: var(--transition);
+}
+
+.btn-confirm-team:hover:not(:disabled) {
+    background: #158a50;
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(26, 158, 92, 0.25);
+    transform: translateY(-1px);
+}
+
+.btn-confirm-team:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--eh-ink-muted);
+    color: #fff;
+}
+
+.btn-cancel-team {
+    border: 1.5px solid var(--eh-danger);
+    color: var(--eh-danger);
+    background: transparent;
+    transition: var(--transition);
+}
+
+.btn-cancel-team:hover {
+    background: var(--eh-danger);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* --- Invitations Page --- */
+.eh-invitations-page {
+    min-height: calc(100vh - 60px);
+}
+
+.eh-invite-card {
+    background: var(--eh-bg-card);
+    border: 1px solid var(--eh-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+    animation: fadeInUp 0.4s ease-out both;
+}
+
+.eh-invite-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--eh-accent);
+}
+
+.eh-invite-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.eh-invite-event-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.eh-invite-countdown {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #d97706;
+    background: rgba(217, 119, 6, 0.08);
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.eh-invite-countdown.eh-countdown-urgent {
+    color: var(--eh-danger);
+    background: rgba(220, 53, 69, 0.08);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.eh-invite-details {
+    font-size: 0.88rem;
+    color: var(--eh-ink-soft);
+    margin-bottom: 0.75rem;
+}
+
+.eh-invite-details i {
+    color: var(--eh-accent);
+    margin-right: 4px;
+}
+
+.eh-invite-warning {
+    font-size: 0.78rem;
+    color: #d97706;
+    background: rgba(217, 119, 6, 0.06);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.eh-invite-warning i {
+    flex-shrink: 0;
+}
+
+.eh-invite-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.btn-accept-invite {
+    background: var(--eh-success);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.88rem;
+    padding: 0.55rem 1.25rem;
+    transition: var(--transition);
+}
+
+.btn-accept-invite:hover {
+    background: #158a50;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(26, 158, 92, 0.25);
+    transform: translateY(-1px);
+}
+
+.btn-decline-invite {
+    border: 1.5px solid var(--eh-danger);
+    color: var(--eh-danger);
+    background: transparent;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.88rem;
+    padding: 0.55rem 1.25rem;
+    transition: var(--transition);
+}
+
+.btn-decline-invite:hover {
+    background: var(--eh-danger);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* --- Invite Popup (toast-like) --- */
+.eh-invite-popup-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 380px;
+    width: 100%;
+}
+
+.eh-invite-popup {
+    background: var(--eh-bg-card);
+    border: 1.5px solid var(--eh-accent);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-lg);
+    animation: slideInRight 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.eh-invite-popup.eh-popup-exit {
+    animation: slideOutRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+.eh-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.eh-popup-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--eh-accent);
+}
+
+.eh-popup-dismiss {
+    background: none;
+    border: none;
+    color: var(--eh-ink-muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0;
+    line-height: 1;
+    transition: var(--transition);
+}
+
+.eh-popup-dismiss:hover {
+    color: var(--eh-ink);
+}
+
+.eh-popup-event {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.eh-popup-from {
+    font-size: 0.82rem;
+    color: var(--eh-ink-soft);
+    margin-bottom: 0.75rem;
+}
+
+.eh-popup-actions {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.eh-popup-actions .btn {
+    font-size: 0.8rem;
+    padding: 0.4rem 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+}
+
+/* --- Navbar invite badge --- */
+.eh-nav-invite-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--eh-ink) !important;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-pill);
+    transition: var(--transition);
+}
+
+.eh-nav-invite-link:hover {
+    background: var(--eh-accent-light);
+    color: var(--eh-accent) !important;
+}
+
+.eh-invite-badge {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    background: var(--eh-accent);
+    color: #fff;
+    min-width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    line-height: 1;
+}
+
+.eh-invite-badge:empty {
+    display: none;
+}
+
+/* --- Team Event button in register tab --- */
+.btn-team-register {
+    background: linear-gradient(135deg, #6f42c1, #8b5cf6);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.88rem;
+    padding: 0.55rem 1.25rem;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-team-register:hover {
+    background: linear-gradient(135deg, #5a32a3, #7c3aed);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(111, 66, 193, 0.3);
+    transform: translateY(-1px);
+}
+
+/* --- Progress bar for invite timer --- */
+.eh-invite-timer-bar {
+    height: 3px;
+    background: var(--eh-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.eh-invite-timer-fill {
+    height: 100%;
+    background: var(--eh-accent);
+    border-radius: 2px;
+    transition: width 1s linear;
+}

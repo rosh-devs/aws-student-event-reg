@@ -174,7 +174,7 @@
 
             searchTimers[slotIndex] = setTimeout(async () => {
                 try {
-                    const resp = await fetch(`/users/search?q=${encodeURIComponent(query)}`, {
+                    const resp = await fetch(`/users/search?q=${encodeURIComponent(query)}&event_id=${EVENT_ID}&team_id=${teamId || ''}`, {
                         headers: { Accept: "application/json" },
                         credentials: "same-origin"
                     });

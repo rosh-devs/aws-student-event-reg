@@ -144,6 +144,10 @@ def init_db():
             cursor.execute("ALTER TABLE registrations ADD COLUMN team_id INT DEFAULT NULL")
         except Exception:
             pass
+        try:
+            cursor.execute("ALTER TABLE team_members MODIFY COLUMN status ENUM('pending', 'accepted', 'declined', 'expired') DEFAULT 'pending'")
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
@@ -186,11 +190,11 @@ def _get_pending_invite_count(email):
 
 
 def _expire_old_invites(cursor):
-    """Mark expired pending invites as 'declined' without triggering cooldown."""
+    """Mark expired pending invites as 'expired' without triggering cooldown."""
     cutoff = datetime.now() - timedelta(seconds=INVITE_EXPIRY_SECONDS)
     cursor.execute("""
         UPDATE team_members
-        SET status = 'declined', responded_at = %s
+        SET status = 'expired', responded_at = %s
         WHERE status = 'pending'
           AND invited_at <= %s
     """, (datetime.now(), cutoff))
@@ -524,6 +528,14 @@ def create_team(event_id):
             if cursor.fetchone():
                 return jsonify({"error": "You already have a team for this event."}), 400
 
+            cursor.execute("""
+                SELECT tm.id FROM team_members tm
+                JOIN teams t ON tm.team_id = t.id
+                WHERE tm.email = %s AND t.event_id = %s AND tm.status = 'accepted'
+            """, (user_email, event_id))
+            if cursor.fetchone():
+                return jsonify({"error": "You have already accepted an invite for this event."}), 400
+
             now = datetime.now()
             cursor.execute(
                 "INSERT INTO teams (event_id, leader_email, created_at, is_complete) VALUES (%s, %s, %s, FALSE)",
@@ -600,18 +612,6 @@ def invite_to_team(team_id):
             if cursor.fetchone():
                 return jsonify({"error": "User has already accepted another team for this event."}), 400
 
-            # Check max members not exceeded
-            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
-            event = cursor.fetchone()
-            max_members = event["max_members"]
-
-            cursor.execute(
-                "SELECT COUNT(*) AS cnt FROM team_members WHERE team_id = %s AND status IN ('pending', 'accepted')",
-                (team_id,)
-            )
-            current_count = cursor.fetchone()["cnt"]
-            if current_count >= max_members - 1:  # -1 because leader is slot 1
-                return jsonify({"error": "Team is already at maximum capacity."}), 400
 
             # Check decline cooldown
             now = datetime.now()
@@ -746,31 +746,34 @@ def confirm_team(team_id):
                     "error": f"Need at least {event['min_members'] - 1} accepted members. Currently have {accepted_count}."
                 }), 400
 
-            # Mark team as complete
-            now = datetime.now()
-            cursor.execute("UPDATE teams SET is_complete = TRUE WHERE id = %s", (team_id,))
-
-            # Register the leader
-            cursor.execute(
-                "INSERT INTO registrations (email, event_id, registered_at, is_team_registration, team_id) VALUES (%s, %s, %s, TRUE, %s)",
-                (user_email, event_id, now, team_id)
-            )
-
-            # Register all accepted members
+            # Get the full list of emails to register (Leader + Accepted Members)
             cursor.execute(
                 "SELECT email FROM team_members WHERE team_id = %s AND status = 'accepted'",
                 (team_id,)
             )
             accepted_members = cursor.fetchall()
-            for member in accepted_members:
+            emails_to_register = [user_email] + [m["email"] for m in accepted_members]
+
+            # ADD THIS PRE-FLIGHT CHECK:
+            for email in emails_to_register:
+                cursor.execute("SELECT id FROM registrations WHERE email = %s AND event_id = %s", (email, event_id))
+                if cursor.fetchone():
+                    return jsonify({"error": f"Conflict: {email} was just registered elsewhere."}), 409
+
+            # Now safe to mark team as complete
+            now = datetime.now()
+            cursor.execute("UPDATE teams SET is_complete = TRUE WHERE id = %s", (team_id,))
+
+            # Execute all insertions safely
+            for email in emails_to_register:
                 cursor.execute(
                     "INSERT INTO registrations (email, event_id, registered_at, is_team_registration, team_id) VALUES (%s, %s, %s, TRUE, %s)",
-                    (member["email"], event_id, now, team_id)
+                    (email, event_id, now, team_id)
                 )
 
             # Dismiss remaining pending invites
             cursor.execute(
-                "UPDATE team_members SET status = 'declined', responded_at = %s WHERE team_id = %s AND status = 'pending'",
+                "UPDATE team_members SET status = 'expired', responded_at = %s WHERE team_id = %s AND status = 'pending'",
                 (now, team_id)
             )
 
@@ -894,7 +897,7 @@ def respond_to_invite(invite_id):
             now = datetime.now()
             if now > expires_at:
                 cursor.execute(
-                    "UPDATE team_members SET status = 'declined', responded_at = %s WHERE id = %s",
+                    "UPDATE team_members SET status = 'expired', responded_at = %s WHERE id = %s",
                     (now, invite_id)
                 )
                 conn.commit()
@@ -911,6 +914,26 @@ def respond_to_invite(invite_id):
             event_id = team["event_id"]
 
             if response_action == "accepted":
+                # ADD THIS NEW CAPACITY CHECK:
+                cursor.execute("SELECT max_members FROM events WHERE id = %s", (event_id,))
+                max_members = cursor.fetchone()["max_members"]
+                
+                cursor.execute(
+                    "SELECT COUNT(*) AS cnt FROM team_members WHERE team_id = %s AND status = 'accepted'", 
+                    (team_id,)
+                )
+                accepted_count = cursor.fetchone()["cnt"]
+                
+                if accepted_count + 1 >= max_members: # +1 accounts for the leader
+                    return jsonify({"error": "This team is already full."}), 403
+
+                cursor.execute(
+                    "SELECT id FROM teams WHERE leader_email = %s AND event_id = %s AND is_complete = FALSE", 
+                    (user_email, event_id)
+                )
+                if cursor.fetchone():
+                    return jsonify({"error": "You cannot accept this invite because you are leading another team for this event."}), 400
+
                 # Check user hasn't already accepted another team for same event
                 cursor.execute("""
                     SELECT tm.* FROM team_members tm
@@ -927,16 +950,12 @@ def respond_to_invite(invite_id):
                     (now, invite_id)
                 )
 
-                # Silently mark other pending invites for the SAME event as non-actionable (declined)
-                cursor.execute("""
-                    UPDATE team_members tm
-                    JOIN teams t ON tm.team_id = t.id
-                    SET tm.status = 'declined', tm.responded_at = %s
-                    WHERE tm.email = %s
-                      AND t.event_id = %s
-                      AND tm.status = 'pending'
-                      AND tm.id != %s
-                """, (now, user_email, event_id, invite_id))
+                # Add +2 (1 for the leader, 1 for the user who just accepted this invite)
+                if accepted_count + 2 >= max_members:
+                    cursor.execute(
+                        "UPDATE team_members SET status = 'expired', responded_at = %s WHERE team_id = %s AND status = 'pending'",
+                        (now, team_id)
+                    )
 
             elif response_action == "declined":
                 cursor.execute(
@@ -966,7 +985,10 @@ def respond_to_invite(invite_id):
 @login_required
 def search_users():
     query = request.args.get("q", "").strip()
-    if len(query) < 2:
+    event_id = request.args.get("event_id", "").strip()
+    team_id = request.args.get("team_id", "").strip()
+    
+    if len(query) < 2 or not event_id or not team_id:
         return jsonify({"users": []})
 
     conn = get_db_connection()
@@ -978,9 +1000,20 @@ def search_users():
                 FROM users
                 WHERE (name LIKE %s OR student_id LIKE %s)
                   AND email != %s
+                  AND email NOT IN (
+                      SELECT email FROM registrations WHERE event_id = %s
+                  )
+                  AND email NOT IN (
+                      SELECT leader_email FROM teams WHERE event_id = %s AND is_complete = FALSE
+                  )
+                  AND email NOT IN (
+                      SELECT tm.email FROM team_members tm
+                      JOIN teams t ON tm.team_id = t.id
+                      WHERE t.event_id = %s AND tm.status = 'accepted'
+                  )
                 ORDER BY name ASC
                 LIMIT 10
-            """, (search_term, search_term, session["user"]["email"]))
+            """, (search_term, search_term, session["user"]["email"], event_id, event_id, event_id))
             users = cursor.fetchall()
 
         return jsonify({"users": users})

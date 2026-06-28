@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import boto3
@@ -174,7 +174,7 @@ def _get_pending_invite_count(email):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.now() - timedelta(seconds=INVITE_EXPIRY_SECONDS)
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=INVITE_EXPIRY_SECONDS)
             cursor.execute("""
                 SELECT COUNT(*) AS cnt
                 FROM team_members tm
@@ -191,13 +191,13 @@ def _get_pending_invite_count(email):
 
 def _expire_old_invites(cursor):
     """Mark expired pending invites as 'expired' without triggering cooldown."""
-    cutoff = datetime.now() - timedelta(seconds=INVITE_EXPIRY_SECONDS)
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=INVITE_EXPIRY_SECONDS)
     cursor.execute("""
         UPDATE team_members
         SET status = 'expired', responded_at = %s
         WHERE status = 'pending'
           AND invited_at <= %s
-    """, (datetime.now(), cutoff))
+    """, (datetime.now(timezone.utc), cutoff))
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ def register():
         if file and file.filename:
             if _allowed_file(file.filename):
                 original_fname = secure_filename(file.filename)
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
                 student_id_filename = f"student_ids/{timestamp}_{original_fname}"
 
                 try:
@@ -397,7 +397,7 @@ def register_event():
 
             cursor.execute(
                 "INSERT INTO registrations (email, event_id, registered_at) VALUES (%s, %s, %s)",
-                (user_email, event_id, datetime.now())
+                (user_email, event_id, datetime.now(timezone.utc))
             )
             conn.commit()
 
@@ -536,7 +536,7 @@ def create_team(event_id):
             if cursor.fetchone():
                 return jsonify({"error": "You have already accepted an invite for this event."}), 400
 
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             cursor.execute(
                 "INSERT INTO teams (event_id, leader_email, created_at, is_complete) VALUES (%s, %s, %s, FALSE)",
                 (event_id, user_email, now)
@@ -614,7 +614,7 @@ def invite_to_team(team_id):
 
 
             # Check decline cooldown
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             cursor.execute("""
                 SELECT * FROM invite_cooldowns
                 WHERE leader_email = %s AND invitee_email = %s AND event_id = %s
@@ -622,7 +622,7 @@ def invite_to_team(team_id):
             """, (user_email, invitee_email, event_id, now))
             cooldown = cursor.fetchone()
             if cooldown:
-                remaining = (cooldown["cooldown_until"] - now).total_seconds()
+                remaining = (cooldown["cooldown_until"].replace(tzinfo=timezone.utc) - now).total_seconds()
                 return jsonify({
                     "error": f"Cooldown active. You can re-invite this user in {int(remaining)} seconds.",
                     "cooldown_remaining": int(remaining)
@@ -679,18 +679,18 @@ def team_status(team_id):
             members = cursor.fetchall()
 
             # Compute expiry info
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             for m in members:
                 if m["status"] == "pending":
-                    expires_at = m["invited_at"] + timedelta(seconds=INVITE_EXPIRY_SECONDS)
+                    expires_at = m["invited_at"].replace(tzinfo=timezone.utc) + timedelta(seconds=INVITE_EXPIRY_SECONDS)
                     m["expires_at"] = expires_at.isoformat()
                     m["seconds_remaining"] = max(0, int((expires_at - now).total_seconds()))
                 else:
                     m["expires_at"] = None
                     m["seconds_remaining"] = 0
                 # Convert datetimes to ISO strings for JSON
-                m["invited_at"] = m["invited_at"].isoformat() if m["invited_at"] else None
-                m["responded_at"] = m["responded_at"].isoformat() if m["responded_at"] else None
+                m["invited_at"] = m["invited_at"].replace(tzinfo=timezone.utc).isoformat() if m["invited_at"] else None
+                m["responded_at"] = m["responded_at"].replace(tzinfo=timezone.utc).isoformat() if m["responded_at"] else None
 
             accepted_count = sum(1 for m in members if m["status"] == "accepted")
             min_met = accepted_count >= (event["min_members"] - 1)
@@ -761,7 +761,7 @@ def confirm_team(team_id):
                     return jsonify({"error": f"Conflict: {email} was just registered elsewhere."}), 409
 
             # Now safe to mark team as complete
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             cursor.execute("UPDATE teams SET is_complete = TRUE WHERE id = %s", (team_id,))
 
             # Execute all insertions safely
@@ -826,8 +826,8 @@ def pending_invites():
             _expire_old_invites(cursor)
             conn.commit()
 
-            cutoff = datetime.now() - timedelta(seconds=INVITE_EXPIRY_SECONDS)
-            now = datetime.now()
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=INVITE_EXPIRY_SECONDS)
+            now = datetime.now(timezone.utc)
 
             cursor.execute("""
                 SELECT tm.id, tm.team_id, tm.status, tm.invited_at,
@@ -848,10 +848,10 @@ def pending_invites():
             invites = cursor.fetchall()
 
             for inv in invites:
-                expires_at = inv["invited_at"] + timedelta(seconds=INVITE_EXPIRY_SECONDS)
+                expires_at = inv["invited_at"].replace(tzinfo=timezone.utc) + timedelta(seconds=INVITE_EXPIRY_SECONDS)
                 inv["expires_at"] = expires_at.isoformat()
                 inv["seconds_remaining"] = max(0, int((expires_at - now).total_seconds()))
-                inv["invited_at"] = inv["invited_at"].isoformat() if inv["invited_at"] else None
+                inv["invited_at"] = inv["invited_at"].replace(tzinfo=timezone.utc).isoformat() if inv["invited_at"] else None
 
     finally:
         conn.close()
@@ -893,8 +893,8 @@ def respond_to_invite(invite_id):
                 return jsonify({"error": "This invite is no longer pending."}), 400
 
             # Check if expired
-            expires_at = invite["invited_at"] + timedelta(seconds=INVITE_EXPIRY_SECONDS)
-            now = datetime.now()
+            expires_at = invite["invited_at"].replace(tzinfo=timezone.utc) + timedelta(seconds=INVITE_EXPIRY_SECONDS)
+            now = datetime.now(timezone.utc)
             if now > expires_at:
                 cursor.execute(
                     "UPDATE team_members SET status = 'expired', responded_at = %s WHERE id = %s",
@@ -1022,4 +1022,4 @@ def search_users():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0',debug=True, port=5000)

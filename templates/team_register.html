@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+{% block title %}Team Registration — EventHub{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg eh-navbar sticky-top">
+    <div class="container">
+        <a class="navbar-brand eh-navbar-brand" href="{{ url_for('dashboard') }}">
+            <i class="bi bi-calendar2-event-fill me-2"></i>EventHub
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <ul class="navbar-nav ms-auto align-items-center gap-2">
+                <li class="nav-item">
+                    <a class="nav-link eh-nav-invite-link" href="{{ url_for('pending_invites') }}" id="navInvitesLink">
+                        <i class="bi bi-bell-fill"></i>Invitations
+                        <span class="eh-invite-badge" id="ehInviteBadge">{% if pending_invite_count > 0 %}{{ pending_invite_count }}{% endif %}</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <span class="nav-link eh-nav-user">
+                        <span class="eh-avatar">{{ session['user']['name'][0] | upper }}</span>
+                        {{ session['user']['name'] }}
+                        <span class="eh-dept-badge">{{ session['user']['department'] }}</span>
+                    </span>
+                </li>
+                <li class="nav-item">
+                    <a class="btn btn-outline-dark btn-sm eh-logout-btn" href="{{ url_for('logout') }}" id="logoutBtn">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="eh-team-page">
+    <div class="container py-4 py-lg-5">
+
+        <!-- Back to dashboard -->
+        <a href="{{ url_for('dashboard') }}" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:0.88rem; font-weight:600;">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+
+        <!-- Event Info Card -->
+        <div class="eh-event-info-card" id="teamEventInfo">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="eh-event-category">{{ event.category }}</span>
+                <span class="eh-team-badge"><i class="bi bi-people-fill"></i> Team Event</span>
+            </div>
+            <h1 class="eh-event-title">{{ event.title }}</h1>
+            <div class="eh-event-info-meta">
+                <span><i class="bi bi-calendar3"></i>{{ event.date }}</span>
+                <span><i class="bi bi-geo-alt"></i>{{ event.location }}</span>
+                <span><i class="bi bi-people-fill"></i>{{ event.min_members }}–{{ event.max_members }} members</span>
+                <span><i class="bi bi-ticket-perforated"></i>{{ event.capacity }} seats</span>
+            </div>
+        </div>
+
+        <!-- Team Slots Card -->
+        <div class="eh-team-slots-card" id="teamSlotsCard">
+            <div class="eh-team-slots-header">
+                <h3><i class="bi bi-people-fill me-2 text-accent"></i>Build Your Team</h3>
+                <span class="eh-min-indicator eh-min-unmet" id="minIndicator">
+                    <i class="bi bi-info-circle-fill"></i>
+                    Min <span id="minCount">{{ event.min_members }}</span> members required
+                </span>
+            </div>
+
+            <!-- Slot 1: Leader (always filled) -->
+            <div class="eh-team-slot eh-slot-leader" id="slot-1">
+                <span class="eh-slot-number">1</span>
+                <div class="eh-slot-info">
+                    <div class="eh-slot-name">{{ session['user']['name'] }}</div>
+                    <div class="eh-slot-detail">{{ session['user']['email'] }} · {{ session['user']['department'] }}</div>
+                </div>
+                <span class="eh-slot-status eh-status-leader">Leader</span>
+            </div>
+
+            <!-- Slots 2+ rendered dynamically -->
+            <div id="teamSlotsContainer">
+                {% for i in range(2, event.max_members + 1) %}
+                <div class="eh-team-slot" id="slot-{{ i }}" data-slot="{{ i }}">
+                    <span class="eh-slot-number">{{ i }}</span>
+                    <div class="eh-slot-info" style="position:relative;">
+                        <div class="eh-slot-search" id="search-{{ i }}">
+                            <input type="text" placeholder="Search by name or student ID..." 
+                                   class="slot-search-input" data-slot="{{ i }}"
+                                   autocomplete="off">
+                            <button class="btn btn-accent btn-sm slot-invite-btn" data-slot="{{ i }}" disabled>
+                                <i class="bi bi-send-fill me-1"></i>Invite
+                            </button>
+                        </div>
+                        <div class="eh-search-dropdown" id="dropdown-{{ i }}"></div>
+                        <!-- Filled state (hidden by default) -->
+                        <div class="slot-filled-info d-none" id="filled-{{ i }}">
+                            <div class="eh-slot-name" id="filled-name-{{ i }}"></div>
+                            <div class="eh-slot-detail" id="filled-detail-{{ i }}"></div>
+                        </div>
+                    </div>
+                    <span class="eh-slot-status eh-status-empty" id="status-{{ i }}">Empty</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Actions -->
+            <div class="eh-team-actions">
+                <button class="btn btn-confirm-team" id="confirmTeamBtn" disabled>
+                    <i class="bi bi-check-circle-fill me-2"></i>Confirm Team Registration
+                </button>
+                <button class="btn btn-cancel-team" id="cancelTeamBtn">
+                    <i class="bi bi-x-circle me-2"></i>Cancel Team
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/team.js') }}"></script>
+<script>
+(function() {
+    "use strict";
+
+    const EVENT_ID = "{{ event.id }}";
+    const MIN_MEMBERS = {{ event.min_members }};
+    const MAX_MEMBERS = {{ event.max_members }};
+    const INVITE_EXPIRY = 180; // 3 minutes in seconds
+
+    let teamId = {{ team.id if team else 'null' }};
+    let teamConfirmed = false;
+    let slotData = {}; // { slotIndex: { email, name, inviteId, status } }
+    let selectedUsers = {}; // { slotIndex: { email, name, student_id, department } }
+    let searchTimers = {};
+
+    // ----- Team Creation -----
+    async function ensureTeam() {
+        if (teamId) return;
+        try {
+            const resp = await fetch(`/event/${EVENT_ID}/create-team`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin"
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                teamId = data.team_id;
+            } else {
+                alert(data.error || "Failed to create team.");
+            }
+        } catch (e) {
+            console.error("Team creation failed:", e);
+        }
+    }
+
+    // ----- User Search -----
+    document.querySelectorAll(".slot-search-input").forEach(input => {
+        const slotIndex = input.dataset.slot;
+
+        input.addEventListener("input", function() {
+            const query = this.value.trim();
+            clearTimeout(searchTimers[slotIndex]);
+
+            if (query.length < 2) {
+                hideDropdown(slotIndex);
+                disableInviteBtn(slotIndex);
+                return;
+            }
+
+            searchTimers[slotIndex] = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`/users/search?q=${encodeURIComponent(query)}&event_id=${EVENT_ID}&team_id=${teamId || ''}`, {
+                        headers: { Accept: "application/json" },
+                        credentials: "same-origin"
+                    });
+                    const data = await resp.json();
+                    showDropdown(slotIndex, data.users || []);
+                } catch (e) {
+                    console.error("Search failed:", e);
+                }
+            }, 300);
+        });
+
+        input.addEventListener("blur", () => {
+            // Delay to allow click on dropdown
+            setTimeout(() => hideDropdown(slotIndex), 200);
+        });
+    });
+
+    function showDropdown(slotIndex, users) {
+        const dd = document.getElementById(`dropdown-${slotIndex}`);
+        if (!dd) return;
+
+        // Filter out already invited/selected users
+        const usedEmails = new Set(Object.values(slotData).map(s => s.email));
+        const filtered = users.filter(u => !usedEmails.has(u.email));
+
+        if (filtered.length === 0) {
+            dd.innerHTML = '<div class="eh-search-result" style="color:var(--eh-ink-muted);cursor:default;">No results found</div>';
+        } else {
+            dd.innerHTML = filtered.map(u => `
+                <div class="eh-search-result" data-email="${u.email}" data-name="${u.name}" 
+                     data-sid="${u.student_id}" data-dept="${u.department}">
+                    <span>
+                        <span class="eh-search-result-name">${escapeHtml(u.name)}</span>
+                        <span class="eh-search-result-meta ms-2">${escapeHtml(u.department)}</span>
+                    </span>
+                    <span class="eh-search-result-meta">${escapeHtml(u.student_id)}</span>
+                </div>
+            `).join("");
+        }
+
+        dd.classList.add("show");
+
+        // Click handlers
+        dd.querySelectorAll(".eh-search-result[data-email]").forEach(item => {
+            item.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                selectUser(slotIndex, {
+                    email: item.dataset.email,
+                    name: item.dataset.name,
+                    student_id: item.dataset.sid,
+                    department: item.dataset.dept
+                });
+                hideDropdown(slotIndex);
+            });
+        });
+    }
+
+    function hideDropdown(slotIndex) {
+        const dd = document.getElementById(`dropdown-${slotIndex}`);
+        if (dd) dd.classList.remove("show");
+    }
+
+    function selectUser(slotIndex, user) {
+        selectedUsers[slotIndex] = user;
+        const input = document.querySelector(`.slot-search-input[data-slot="${slotIndex}"]`);
+        if (input) input.value = user.name;
+        enableInviteBtn(slotIndex);
+    }
+
+    function enableInviteBtn(slotIndex) {
+        const btn = document.querySelector(`.slot-invite-btn[data-slot="${slotIndex}"]`);
+        if (btn) btn.disabled = false;
+    }
+
+    function disableInviteBtn(slotIndex) {
+        const btn = document.querySelector(`.slot-invite-btn[data-slot="${slotIndex}"]`);
+        if (btn) btn.disabled = true;
+    }
+
+    // ----- Invite -----
+    document.querySelectorAll(".slot-invite-btn").forEach(btn => {
+        btn.addEventListener("click", async function() {
+            const slotIndex = this.dataset.slot;
+            const user = selectedUsers[slotIndex];
+            if (!user) return;
+
+            await ensureTeam();
+            if (!teamId) return;
+
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
+
+            try {
+                const resp = await fetch(`/team/${teamId}/invite`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ email: user.email })
+                });
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    slotData[slotIndex] = {
+                        email: user.email,
+                        name: user.name,
+                        inviteId: data.invite_id,
+                        status: "pending",
+                        expiresAt: data.expires_at
+                    };
+                    renderSlotFilled(slotIndex);
+                } else {
+                    alert(data.error || "Failed to send invite.");
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-send-fill me-1"></i>Invite';
+                }
+            } catch (e) {
+                alert("Network error. Please try again.");
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-send-fill me-1"></i>Invite';
+            }
+        });
+    });
+
+    function renderSlotFilled(slotIndex) {
+        const slot = slotData[slotIndex];
+        if (!slot) return;
+
+        const searchDiv = document.getElementById(`search-${slotIndex}`);
+        const filledDiv = document.getElementById(`filled-${slotIndex}`);
+        const nameEl = document.getElementById(`filled-name-${slotIndex}`);
+        const detailEl = document.getElementById(`filled-detail-${slotIndex}`);
+        const statusEl = document.getElementById(`status-${slotIndex}`);
+
+        if (searchDiv) searchDiv.classList.add("d-none");
+        if (filledDiv) filledDiv.classList.remove("d-none");
+        if (nameEl) nameEl.textContent = slot.name;
+
+        let detailHtml = slot.email;
+        if (slot.status === "pending" && slot.expiresAt) {
+            const remaining = Math.max(0, Math.floor((new Date(slot.expiresAt) - new Date()) / 1000));
+            detailHtml += ` <span class="eh-slot-countdown" id="countdown-${slotIndex}">⏱ ${formatTime(remaining)}</span>`;
+        }
+        if (detailEl) detailEl.innerHTML = detailHtml;
+
+        if (statusEl) {
+            statusEl.className = "eh-slot-status";
+            if (slot.status === "pending") {
+                statusEl.classList.add("eh-status-pending");
+                statusEl.textContent = "Pending";
+            } else if (slot.status === "accepted") {
+                statusEl.classList.add("eh-status-accepted");
+                statusEl.textContent = "Accepted";
+            } else if (slot.status === "declined") {
+                statusEl.classList.add("eh-status-declined");
+                statusEl.textContent = "Declined";
+                // Re-enable the search for this slot
+                resetSlot(slotIndex);
+            }
+        }
+
+        updateMinIndicator();
+    }
+
+    function resetSlot(slotIndex) {
+        delete slotData[slotIndex];
+        delete selectedUsers[slotIndex];
+
+        const searchDiv = document.getElementById(`search-${slotIndex}`);
+        const filledDiv = document.getElementById(`filled-${slotIndex}`);
+        const statusEl = document.getElementById(`status-${slotIndex}`);
+        const input = document.querySelector(`.slot-search-input[data-slot="${slotIndex}"]`);
+        const btn = document.querySelector(`.slot-invite-btn[data-slot="${slotIndex}"]`);
+
+        if (searchDiv) searchDiv.classList.remove("d-none");
+        if (filledDiv) filledDiv.classList.add("d-none");
+        if (statusEl) {
+            statusEl.className = "eh-slot-status eh-status-empty";
+            statusEl.textContent = "Empty";
+        }
+        if (input) { input.value = ""; }
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-send-fill me-1"></i>Invite';
+        }
+
+        updateMinIndicator();
+    }
+
+    // ----- Status Polling -----
+    async function pollTeamStatus() {
+        if (!teamId || teamConfirmed) return;
+
+        try {
+            const resp = await fetch(`/team/${teamId}/status`, {
+                headers: { Accept: "application/json" },
+                credentials: "same-origin"
+            });
+            if (!resp.ok) return;
+
+            const data = await resp.json();
+
+            if (data.is_complete) {
+                teamConfirmed = true;
+                window.location.href = "/dashboard";
+                return;
+            }
+
+            // Map members to slots
+            const members = data.members || [];
+            const usedSlots = new Set();
+
+            // First pass: update existing slot mappings
+            for (const [si, sd] of Object.entries(slotData)) {
+                const member = members.find(m => m.email === sd.email);
+                if (member) {
+                    slotData[si].status = member.status;
+                    if (member.expires_at) {
+                        slotData[si].expiresAt = member.expires_at;
+                    }
+                    slotData[si].inviteId = member.id;
+                    renderSlotFilled(si);
+                    usedSlots.add(si);
+                }
+            }
+
+            // Second pass: add new members not yet in slotData
+            for (const member of members) {
+                const existingSlot = Object.entries(slotData).find(([_, sd]) => sd.email === member.email);
+                if (!existingSlot && member.status !== "declined") {
+                    // Find an empty slot
+                    for (let i = 2; i <= MAX_MEMBERS; i++) {
+                        if (!slotData[i]) {
+                            slotData[i] = {
+                                email: member.email,
+                                name: member.name || member.email,
+                                inviteId: member.id,
+                                status: member.status,
+                                expiresAt: member.expires_at
+                            };
+                            renderSlotFilled(i);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            updateMinIndicator();
+            updateConfirmButton(data.accepted_count, data.min_met);
+
+        } catch (e) {
+            console.error("Status poll failed:", e);
+        }
+    }
+
+    // Poll every 5 seconds
+    setInterval(pollTeamStatus, 5000);
+
+    // ----- Countdown timers -----
+    setInterval(() => {
+        for (const [slotIndex, slot] of Object.entries(slotData)) {
+            if (slot.status === "pending" && slot.expiresAt) {
+                const remaining = Math.max(0, Math.floor((new Date(slot.expiresAt) - new Date()) / 1000));
+                const cdEl = document.getElementById(`countdown-${slotIndex}`);
+                if (cdEl) {
+                    cdEl.textContent = `⏱ ${formatTime(remaining)}`;
+                    if (remaining <= 30) {
+                        cdEl.style.color = "var(--eh-danger)";
+                    }
+                }
+            }
+        }
+    }, 1000);
+
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, "0")}`;
+    }
+
+    // ----- Min indicator & confirm button -----
+    function updateMinIndicator() {
+        const acceptedCount = Object.values(slotData).filter(s => s.status === "accepted").length;
+        const totalNeeded = MIN_MEMBERS - 1; // minus leader
+        const indicator = document.getElementById("minIndicator");
+
+        if (indicator) {
+            if (acceptedCount >= totalNeeded) {
+                indicator.className = "eh-min-indicator eh-min-met";
+                indicator.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${acceptedCount + 1}/${MIN_MEMBERS} members ✓`;
+            } else {
+                indicator.className = "eh-min-indicator eh-min-unmet";
+                indicator.innerHTML = `<i class="bi bi-info-circle-fill"></i> ${acceptedCount + 1}/${MIN_MEMBERS} members needed`;
+            }
+        }
+
+        updateConfirmButton(acceptedCount, acceptedCount >= totalNeeded);
+    }
+
+    function updateConfirmButton(acceptedCount, minMet) {
+        const btn = document.getElementById("confirmTeamBtn");
+        if (btn) {
+            btn.disabled = !minMet;
+        }
+    }
+
+    // ----- Confirm Team -----
+    document.getElementById("confirmTeamBtn").addEventListener("click", async () => {
+        if (!teamId) return;
+
+        const btn = document.getElementById("confirmTeamBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Confirming...';
+
+        try {
+            const resp = await fetch(`/team/${teamId}/confirm`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin"
+            });
+            const data = await resp.json();
+
+            if (resp.ok) {
+                teamConfirmed = true;
+                window.location.href = data.redirect || "/dashboard";
+            } else {
+                alert(data.error || "Failed to confirm team.");
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Confirm Team Registration';
+            }
+        } catch (e) {
+            alert("Network error. Please try again.");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Confirm Team Registration';
+        }
+    });
+
+    // ----- Cancel Team -----
+    document.getElementById("cancelTeamBtn").addEventListener("click", async () => {
+        if (!teamId) {
+            window.location.href = "/dashboard";
+            return;
+        }
+
+        if (!confirm("Are you sure you want to cancel this team? All invites will be dismissed.")) return;
+
+        try {
+            const resp = await fetch(`/team/${teamId}/cancel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin"
+            });
+            const data = await resp.json();
+            teamConfirmed = true; // Prevent beforeunload from firing
+            window.location.href = data.redirect || "/dashboard";
+        } catch (e) {
+            window.location.href = "/dashboard";
+        }
+    });
+
+    // ----- beforeunload: cancel team if navigating away -----
+    window.addEventListener("beforeunload", (e) => {
+        if (teamId && !teamConfirmed) {
+            // Use sendBeacon for reliable delivery
+            navigator.sendBeacon(
+                `/team/${teamId}/cancel`,
+                new Blob([JSON.stringify({})], { type: "application/json" })
+            );
+        }
+    });
+
+    // ----- Utility -----
+    function escapeHtml(str) {
+        if (!str) return "";
+        const div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ----- Auto-create team on page load -----
+    if (!teamId) {
+        ensureTeam().then(() => {
+            if (teamId) pollTeamStatus();
+        });
+    } else {
+        pollTeamStatus();
+    }
+
+})();
+</script>
+{% endblock %}

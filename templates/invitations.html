@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block title %}My Invitations — EventHub{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-expand-lg eh-navbar sticky-top">
+    <div class="container">
+        <a class="navbar-brand eh-navbar-brand" href="{{ url_for('dashboard') }}">
+            <i class="bi bi-calendar2-event-fill me-2"></i>EventHub
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <ul class="navbar-nav ms-auto align-items-center gap-2">
+                <li class="nav-item">
+                    <span class="nav-link eh-nav-user">
+                        <span class="eh-avatar">{{ session['user']['name'][0] | upper }}</span>
+                        {{ session['user']['name'] }}
+                        <span class="eh-dept-badge">{{ session['user']['department'] }}</span>
+                    </span>
+                </li>
+                <li class="nav-item">
+                    <a class="btn btn-outline-dark btn-sm eh-logout-btn position-relative" href="{{ url_for('pending_invites') }}">
+                        <i class="bi bi-bell-fill me-1"></i>Invitations
+                        {% if invites | length > 0 %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-accent-badge" id="navInviteBadge">
+                            {{ invites | length }}
+                        </span>
+                        {% endif %}
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="btn btn-outline-dark btn-sm eh-logout-btn" href="{{ url_for('logout') }}">
+                        <i class="bi bi-box-arrow-right me-1"></i>Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block head %}
+<style>
+    .eh-invite-card {
+        background: var(--eh-bg-card);
+        border: 1px solid var(--eh-border);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        transition: var(--transition);
+        box-shadow: var(--shadow-sm);
+        border-left: 3px solid #e6a817;
+    }
+    .eh-invite-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .eh-invite-event-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0;
+    }
+
+    .eh-invite-leader {
+        font-size: 0.85rem;
+        color: var(--eh-ink-soft);
+    }
+
+    .eh-invite-timer {
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #92600a;
+        background: rgba(230, 168, 23, 0.12);
+        padding: 4px 12px;
+        border-radius: var(--radius-pill);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .eh-invite-timer.expired {
+        color: var(--eh-danger);
+        background: rgba(220, 53, 69, 0.1);
+    }
+
+    .eh-invite-warning {
+        font-size: 0.78rem;
+        color: var(--eh-ink-muted);
+        background: var(--eh-bg);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .eh-invite-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .btn-accept {
+        background: var(--eh-success);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius-pill);
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.5rem 1.2rem;
+        transition: var(--transition);
+    }
+    .btn-accept:hover {
+        background: #15864e;
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(26, 158, 92, 0.3);
+    }
+
+    .btn-decline {
+        background: transparent;
+        color: var(--eh-danger);
+        border: 1.5px solid var(--eh-danger);
+        border-radius: var(--radius-pill);
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.5rem 1.2rem;
+        transition: var(--transition);
+    }
+    .btn-decline:hover {
+        background: var(--eh-danger);
+        color: #fff;
+        transform: translateY(-1px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="eh-dashboard">
+    <div class="container py-4 py-lg-5">
+
+        <!-- Hero -->
+        <section class="eh-hero mb-5">
+            <div class="row align-items-center">
+                <div class="col-lg-7">
+                    <p class="eh-hero-eyebrow">
+                        <i class="bi bi-bell-fill me-1"></i>Invitations
+                    </p>
+                    <h1 class="eh-hero-title">
+                        My <span class="text-accent">Invitations</span>
+                    </h1>
+                    <p class="eh-hero-subtitle">Team invites waiting for your response.</p>
+                </div>
+                <div class="col-lg-5">
+                    <div class="row g-3 mt-3 mt-lg-0">
+                        <div class="col-6">
+                            <div class="eh-kpi-card kpi-accent eh-kpi-visible" style="opacity:1;transform:none;">
+                                <span class="eh-kpi-number" id="pendingCount">{{ invites | length }}</span>
+                                <span class="eh-kpi-label">Pending</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Invite Cards -->
+        <div id="invitesContainer">
+            {% if invites %}
+            <div class="row g-4">
+                {% for invite in invites %}
+                <div class="col-md-6 col-xl-4" id="inviteCard-{{ invite.id }}">
+                    <div class="eh-invite-card">
+                        <div class="eh-event-card-header">
+                            <span class="eh-event-category"><i class="bi bi-people-fill me-1"></i>Team Invite</span>
+                        </div>
+                        <h3 class="eh-invite-event-name">{{ invite.event_title }}</h3>
+                        <p class="eh-invite-leader">
+                            <i class="bi bi-person-fill me-1 text-accent"></i>
+                            Invited by <strong>{{ invite.leader_name }}</strong>
+                            <span class="eh-search-item-email ms-1">{{ invite.leader_email }}</span>
+                        </p>
+                        <div>
+                            <span class="eh-invite-timer" data-expires="{{ invite.expires_at }}" id="inviteTimer-{{ invite.id }}">
+                                <i class="bi bi-hourglass-split"></i>
+                                <span class="timer-text">calculating…</span>
+                            </span>
+                        </div>
+                        <div class="eh-invite-warning">
+                            <i class="bi bi-exclamation-triangle-fill text-accent"></i>
+                            Note: You cannot leave this team after accepting.
+                        </div>
+                        <div class="eh-invite-actions">
+                            <button class="btn-accept" onclick="respondInvite('{{ invite.id }}', 'accepted', this)">
+                                <i class="bi bi-check-circle-fill me-1"></i>Accept
+                            </button>
+                            <button class="btn-decline" onclick="respondInvite('{{ invite.id }}', 'declined', this)">
+                                <i class="bi bi-x-circle me-1"></i>Decline
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="eh-empty-state">
+                <i class="bi bi-bell-slash eh-empty-icon"></i>
+                <h3>No pending invitations</h3>
+                <p>When someone invites you to their team, it will appear here.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    // -----------------------------------------------------------------------
+    // Countdown timers for each invite
+    // -----------------------------------------------------------------------
+    function updateTimers() {
+        document.querySelectorAll('.eh-invite-timer').forEach(timerEl => {
+            const expiresAt = new Date(timerEl.dataset.expires).getTime();
+            const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+            const mins = Math.floor(remaining / 60);
+            const secs = remaining % 60;
+            const textEl = timerEl.querySelector('.timer-text');
+
+            if (remaining <= 0) {
+                textEl.textContent = 'Expired';
+                timerEl.classList.add('expired');
+                // Disable buttons in this card
+                const card = timerEl.closest('.eh-invite-card');
+                if (card) {
+                    card.querySelectorAll('.btn-accept, .btn-decline').forEach(btn => {
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+                    });
+                }
+            } else {
+                textEl.textContent = `${mins}:${secs.toString().padStart(2, '0')} remaining`;
+            }
+        });
+    }
+
+    updateTimers();
+    setInterval(updateTimers, 1000);
+})();
+
+// -----------------------------------------------------------------------
+// Respond to an invite
+// -----------------------------------------------------------------------
+function respondInvite(inviteId, response, btnEl) {
+    const card = document.getElementById(`inviteCard-${inviteId}`);
+    const buttons = card.querySelectorAll('.btn-accept, .btn-decline');
+    buttons.forEach(b => { b.disabled = true; });
+    btnEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
+        (response === 'accepted' ? 'Accepting…' : 'Declining…');
+
+    fetch(`/invite/${inviteId}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: response })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+            buttons.forEach(b => { b.disabled = false; });
+            return;
+        }
+
+        // Animate card removal
+        card.style.transition = 'all 0.3s ease-out';
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(-10px)';
+        setTimeout(() => {
+            card.remove();
+            // Check if any invites left
+            const remaining = document.querySelectorAll('[id^="inviteCard-"]');
+            if (remaining.length === 0) {
+                document.getElementById('invitesContainer').innerHTML = `
+                    <div class="eh-empty-state">
+                        <i class="bi bi-bell-slash eh-empty-icon"></i>
+                        <h3>No pending invitations</h3>
+                        <p>When someone invites you to their team, it will appear here.</p>
+                    </div>`;
+            }
+            // Update count
+            const countEl = document.getElementById('pendingCount');
+            if (countEl) {
+                countEl.textContent = remaining.length;
+            }
+        }, 300);
+    })
+    .catch(() => {
+        alert('Failed to respond. Please try again.');
+        buttons.forEach(b => { b.disabled = false; });
+    });
+}
+</script>
+{% endblock %}

@@ -1,12 +1,15 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import boto3
 import pymysql
 from botocore.exceptions import ClientError
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import (
+    Flask, flash, jsonify, redirect, render_template,
+    request, session, url_for,
+)
 from werkzeug.utils import secure_filename
 
 # ---------------------------------------------------------------------------
@@ -21,6 +24,10 @@ s3_client = boto3.client('s3')
 
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg"}
 ALLOWED_DEPARTMENTS = {"CSE", "ME", "CE", "EC", "AH", "EEE"}
+
+# Invite expiry & cooldown durations (seconds)
+INVITE_EXPIRY_SECONDS = 180       # 3 minutes
+DECLINE_COOLDOWN_SECONDS = 120    # 2 minutes
 
 def _allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -66,7 +73,10 @@ def init_db():
                 date VARCHAR(50),
                 category VARCHAR(50),
                 location VARCHAR(150),
-                capacity INT
+                capacity INT,
+                team_event BOOLEAN DEFAULT FALSE,
+                min_members INT DEFAULT 1,
+                max_members INT DEFAULT 1
             )
         """)
         cursor.execute("""
@@ -75,9 +85,69 @@ def init_db():
                 email VARCHAR(120) NOT NULL,
                 event_id VARCHAR(50) NOT NULL,
                 registered_at DATETIME NOT NULL,
-                file_uploaded VARCHAR(255)
+                file_uploaded VARCHAR(255),
+                is_team_registration BOOLEAN DEFAULT FALSE,
+                team_id INT DEFAULT NULL
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teams (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                event_id VARCHAR(50) NOT NULL,
+                leader_email VARCHAR(120) NOT NULL,
+                created_at DATETIME NOT NULL,
+                is_complete BOOLEAN DEFAULT FALSE,
+                FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS team_members (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                team_id INT NOT NULL,
+                email VARCHAR(120) NOT NULL,
+                status ENUM('pending', 'accepted', 'declined') DEFAULT 'pending',
+                invited_at DATETIME NOT NULL,
+                responded_at DATETIME DEFAULT NULL,
+                FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS invite_cooldowns (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                leader_email VARCHAR(120) NOT NULL,
+                invitee_email VARCHAR(120) NOT NULL,
+                event_id VARCHAR(50) NOT NULL,
+                cooldown_until DATETIME NOT NULL
+            )
+        """)
+
+        # ----- ALTER existing tables for upgrades (safe to run multiple times) -----
+        # Add team columns to events if they don't exist
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN team_event BOOLEAN DEFAULT FALSE")
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN min_members INT DEFAULT 1")
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE events ADD COLUMN max_members INT DEFAULT 1")
+        except Exception:
+            pass
+        # Add team columns to registrations if they don't exist
+        try:
+            cursor.execute("ALTER TABLE registrations ADD COLUMN is_team_registration BOOLEAN DEFAULT FALSE")
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE registrations ADD COLUMN team_id INT DEFAULT NULL")
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE team_members MODIFY COLUMN status ENUM('pending', 'accepted', 'declined', 'expired') DEFAULT 'pending'")
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
@@ -95,6 +165,40 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _get_pending_invite_count(email):
+    """Return the number of pending, non-expired invites for a user."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=INVITE_EXPIRY_SECONDS)
+            cursor.execute("""
+                SELECT COUNT(*) AS cnt
+                FROM team_members tm
+                JOIN teams t ON tm.team_id = t.id
+                WHERE tm.email = %s
+                  AND tm.status = 'pending'
+                  AND tm.invited_at > %s
+                  AND t.is_complete = FALSE
+            """, (email, cutoff))
+            return cursor.fetchone()["cnt"]
+    finally:
+        conn.close()
+
+
+def _expire_old_invites(cursor):
+    """Mark expired pending invites as 'expired' without triggering cooldown."""
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=INVITE_EXPIRY_SECONDS)
+    cursor.execute("""
+        UPDATE team_members
+        SET status = 'expired', responded_at = %s
+        WHERE status = 'pending'
+          AND invited_at <= %s
+    """, (datetime.now(timezone.utc), cutoff))
+
 
 # ---------------------------------------------------------------------------
 # Routes — Auth
@@ -174,7 +278,7 @@ def register():
         if file and file.filename:
             if _allowed_file(file.filename):
                 original_fname = secure_filename(file.filename)
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
                 student_id_filename = f"student_ids/{timestamp}_{original_fname}"
 
                 try:
@@ -226,18 +330,26 @@ def logout():
 @login_required
 def dashboard():
     user_email = session["user"]["email"]
-    
+
     conn = get_db_connection()
     with conn.cursor() as cursor:
         cursor.execute("SELECT * FROM events")
         events = cursor.fetchall()
-        
+
         cursor.execute("SELECT event_id FROM registrations WHERE email = %s", (user_email,))
         user_reg_ids = [row["event_id"] for row in cursor.fetchall()]
+
+        # Check which registrations are team-based (so we can disable Leave)
+        cursor.execute(
+            "SELECT event_id FROM registrations WHERE email = %s AND is_team_registration = TRUE",
+            (user_email,)
+        )
+        team_reg_ids = [row["event_id"] for row in cursor.fetchall()]
     conn.close()
 
     for ev in events:
         ev["is_registered"] = ev["id"] in user_reg_ids
+        ev["is_team_reg"] = ev["id"] in team_reg_ids
 
     total_events = len(events)
     registered_count = len(user_reg_ids)
@@ -245,6 +357,8 @@ def dashboard():
 
     my_events = [ev for ev in events if ev["is_registered"]]
     available_events = [ev for ev in events if not ev["is_registered"]]
+
+    pending_invite_count = _get_pending_invite_count(user_email)
 
     return render_template(
         "dashboard.html",
@@ -254,6 +368,7 @@ def dashboard():
         total_events=total_events,
         registered_count=registered_count,
         upcoming_count=upcoming_count,
+        pending_invite_count=pending_invite_count,
     )
 
 @app.route("/register-event", methods=["POST"])
@@ -269,6 +384,12 @@ def register_event():
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
+            # Check if this is a team event — redirect to team flow
+            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            if event and event.get("team_event"):
+                return redirect(url_for("team_register", event_id=event_id))
+
             cursor.execute("SELECT * FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
             if cursor.fetchone():
                 flash("You are already registered for this event.", "warning")
@@ -276,10 +397,8 @@ def register_event():
 
             cursor.execute(
                 "INSERT INTO registrations (email, event_id, registered_at) VALUES (%s, %s, %s)",
-                (user_email, event_id, datetime.now())
+                (user_email, event_id, datetime.now(timezone.utc))
             )
-            cursor.execute("SELECT title FROM events WHERE id = %s", (event_id,))
-            event = cursor.fetchone()
             conn.commit()
 
         event_title = event["title"] if event else "the event"
@@ -292,25 +411,615 @@ def register_event():
 @login_required
 def leave_event(event_id):
     user_email = session["user"]["email"]
-    
+
     conn = get_db_connection()
     with conn.cursor() as cursor:
-        cursor.execute("SELECT * FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
+        # Prevent leaving team events
+        cursor.execute(
+            "SELECT * FROM registrations WHERE email = %s AND event_id = %s",
+            (user_email, event_id)
+        )
         reg_to_delete = cursor.fetchone()
 
         if not reg_to_delete:
             flash("You are not registered for that event.", "warning")
+        elif reg_to_delete.get("is_team_registration"):
+            flash("You cannot leave a team event after registration.", "danger")
         else:
             cursor.execute("DELETE FROM registrations WHERE email = %s AND event_id = %s", (user_email, event_id))
             cursor.execute("SELECT title FROM events WHERE id = %s", (event_id,))
             event = cursor.fetchone()
             conn.commit()
-            
+
             event_title = event["title"] if event else "the event"
             flash(f"You have left {event_title}.", "info")
     conn.close()
 
     return redirect(url_for("dashboard"))
 
+
+# ===========================================================================
+# TEAM UP — Routes
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# 1. GET /event/<event_id>/team-register — Team registration page
+# ---------------------------------------------------------------------------
+@app.route("/event/<event_id>/team-register")
+@login_required
+def team_register(event_id):
+    user_email = session["user"]["email"]
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            if not event:
+                flash("Event not found.", "danger")
+                return redirect(url_for("dashboard"))
+            if not event.get("team_event"):
+                flash("This is not a team event.", "warning")
+                return redirect(url_for("dashboard"))
+
+            # Check if user is already registered
+            cursor.execute(
+                "SELECT * FROM registrations WHERE email = %s AND event_id = %s",
+                (user_email, event_id)
+            )
+            if cursor.fetchone():
+                flash("You are already registered for this event.", "warning")
+                return redirect(url_for("dashboard"))
+
+            # Check if user already has an incomplete team for this event
+            cursor.execute(
+                "SELECT * FROM teams WHERE leader_email = %s AND event_id = %s AND is_complete = FALSE",
+                (user_email, event_id)
+            )
+            existing_team = cursor.fetchone()
+
+            if existing_team:
+                team = existing_team
+            else:
+                team = None  # Will be created via POST /event/<event_id>/create-team
+
+    finally:
+        conn.close()
+
+    pending_invite_count = _get_pending_invite_count(user_email)
+
+    return render_template(
+        "team_register.html",
+        event=event,
+        team=team,
+        pending_invite_count=pending_invite_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2. POST /event/<event_id>/create-team — Create a new team
+# ---------------------------------------------------------------------------
+@app.route("/event/<event_id>/create-team", methods=["POST"])
+@login_required
+def create_team(event_id):
+    user_email = session["user"]["email"]
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            if not event or not event.get("team_event"):
+                return jsonify({"error": "Invalid team event."}), 400
+
+            # Check not already registered
+            cursor.execute(
+                "SELECT * FROM registrations WHERE email = %s AND event_id = %s",
+                (user_email, event_id)
+            )
+            if cursor.fetchone():
+                return jsonify({"error": "Already registered for this event."}), 400
+
+            # Check no existing incomplete team
+            cursor.execute(
+                "SELECT * FROM teams WHERE leader_email = %s AND event_id = %s AND is_complete = FALSE",
+                (user_email, event_id)
+            )
+            if cursor.fetchone():
+                return jsonify({"error": "You already have a team for this event."}), 400
+
+            cursor.execute("""
+                SELECT tm.id FROM team_members tm
+                JOIN teams t ON tm.team_id = t.id
+                WHERE tm.email = %s AND t.event_id = %s AND tm.status = 'accepted'
+            """, (user_email, event_id))
+            if cursor.fetchone():
+                return jsonify({"error": "You have already accepted an invite for this event."}), 400
+
+            now = datetime.now(timezone.utc)
+            cursor.execute(
+                "INSERT INTO teams (event_id, leader_email, created_at, is_complete) VALUES (%s, %s, %s, FALSE)",
+                (event_id, user_email, now)
+            )
+            conn.commit()
+            team_id = cursor.lastrowid
+
+        return jsonify({"team_id": team_id, "message": "Team created successfully."}), 201
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 3. POST /team/<team_id>/invite — Invite a user to the team
+# ---------------------------------------------------------------------------
+@app.route("/team/<int:team_id>/invite", methods=["POST"])
+@login_required
+def invite_to_team(team_id):
+    user_email = session["user"]["email"]
+    data = request.get_json() or {}
+    invitee_email = data.get("email", "").strip().lower()
+
+    if not invitee_email:
+        return jsonify({"error": "Invitee email is required."}), 400
+
+    if invitee_email == user_email:
+        return jsonify({"error": "You cannot invite yourself."}), 400
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Expire old invites first
+            _expire_old_invites(cursor)
+
+            # Validate team ownership
+            cursor.execute("SELECT * FROM teams WHERE id = %s AND leader_email = %s", (team_id, user_email))
+            team = cursor.fetchone()
+            if not team:
+                return jsonify({"error": "Team not found or you are not the leader."}), 404
+            if team["is_complete"]:
+                return jsonify({"error": "Team is already confirmed."}), 400
+
+            event_id = team["event_id"]
+
+            # Check invitee exists
+            cursor.execute("SELECT * FROM users WHERE email = %s", (invitee_email,))
+            invitee = cursor.fetchone()
+            if not invitee:
+                return jsonify({"error": "User not found."}), 404
+
+            # Check invitee is not already registered for this event
+            cursor.execute(
+                "SELECT * FROM registrations WHERE email = %s AND event_id = %s",
+                (invitee_email, event_id)
+            )
+            if cursor.fetchone():
+                return jsonify({"error": "This user is already registered for the event."}), 400
+
+            # Check invitee doesn't already have a pending/accepted invite for this team
+            cursor.execute(
+                "SELECT * FROM team_members WHERE team_id = %s AND email = %s AND status IN ('pending', 'accepted')",
+                (team_id, invitee_email)
+            )
+            if cursor.fetchone():
+                return jsonify({"error": "User already has an active invite for this team."}), 400
+
+            # Check invitee hasn't accepted another team for the same event
+            cursor.execute("""
+                SELECT tm.* FROM team_members tm
+                JOIN teams t ON tm.team_id = t.id
+                WHERE tm.email = %s AND t.event_id = %s AND tm.status = 'accepted'
+            """, (invitee_email, event_id))
+            if cursor.fetchone():
+                return jsonify({"error": "User has already accepted another team for this event."}), 400
+
+
+            # Check decline cooldown
+            now = datetime.now(timezone.utc)
+            cursor.execute("""
+                SELECT * FROM invite_cooldowns
+                WHERE leader_email = %s AND invitee_email = %s AND event_id = %s
+                  AND cooldown_until > %s
+            """, (user_email, invitee_email, event_id, now))
+            cooldown = cursor.fetchone()
+            if cooldown:
+                remaining = (cooldown["cooldown_until"].replace(tzinfo=timezone.utc) - now).total_seconds()
+                return jsonify({
+                    "error": f"Cooldown active. You can re-invite this user in {int(remaining)} seconds.",
+                    "cooldown_remaining": int(remaining)
+                }), 429
+
+            # All checks pass — create invite
+            cursor.execute(
+                "INSERT INTO team_members (team_id, email, status, invited_at) VALUES (%s, %s, 'pending', %s)",
+                (team_id, invitee_email, now)
+            )
+            conn.commit()
+            invite_id = cursor.lastrowid
+
+        return jsonify({
+            "invite_id": invite_id,
+            "message": f"Invite sent to {invitee_email}.",
+            "expires_at": (now + timedelta(seconds=INVITE_EXPIRY_SECONDS)).isoformat()
+        }), 201
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 4. GET /team/<team_id>/status — Team status (polled by leader)
+# ---------------------------------------------------------------------------
+@app.route("/team/<int:team_id>/status")
+@login_required
+def team_status(team_id):
+    user_email = session["user"]["email"]
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            _expire_old_invites(cursor)
+            conn.commit()
+
+            cursor.execute("SELECT * FROM teams WHERE id = %s", (team_id,))
+            team = cursor.fetchone()
+            if not team:
+                return jsonify({"error": "Team not found."}), 404
+
+            event_id = team["event_id"]
+            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+
+            cursor.execute("""
+                SELECT tm.id, tm.email, tm.status, tm.invited_at, tm.responded_at,
+                       u.name, u.student_id, u.department
+                FROM team_members tm
+                LEFT JOIN users u ON tm.email = u.email
+                WHERE tm.team_id = %s
+                ORDER BY tm.invited_at ASC
+            """, (team_id,))
+            members = cursor.fetchall()
+
+            # Compute expiry info
+            now = datetime.now(timezone.utc)
+            for m in members:
+                if m["status"] == "pending":
+                    expires_at = m["invited_at"].replace(tzinfo=timezone.utc) + timedelta(seconds=INVITE_EXPIRY_SECONDS)
+                    m["expires_at"] = expires_at.isoformat()
+                    m["seconds_remaining"] = max(0, int((expires_at - now).total_seconds()))
+                else:
+                    m["expires_at"] = None
+                    m["seconds_remaining"] = 0
+                # Convert datetimes to ISO strings for JSON
+                m["invited_at"] = m["invited_at"].replace(tzinfo=timezone.utc).isoformat() if m["invited_at"] else None
+                m["responded_at"] = m["responded_at"].replace(tzinfo=timezone.utc).isoformat() if m["responded_at"] else None
+
+            accepted_count = sum(1 for m in members if m["status"] == "accepted")
+            min_met = accepted_count >= (event["min_members"] - 1)
+
+        return jsonify({
+            "team_id": team_id,
+            "event_id": event_id,
+            "leader_email": team["leader_email"],
+            "is_complete": team["is_complete"],
+            "members": members,
+            "accepted_count": accepted_count,
+            "min_members": event["min_members"],
+            "max_members": event["max_members"],
+            "min_met": min_met,
+        })
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 5. POST /team/<team_id>/confirm — Confirm team registration
+# ---------------------------------------------------------------------------
+@app.route("/team/<int:team_id>/confirm", methods=["POST"])
+@login_required
+def confirm_team(team_id):
+    user_email = session["user"]["email"]
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            _expire_old_invites(cursor)
+
+            cursor.execute("SELECT * FROM teams WHERE id = %s AND leader_email = %s", (team_id, user_email))
+            team = cursor.fetchone()
+            if not team:
+                return jsonify({"error": "Team not found or you are not the leader."}), 404
+            if team["is_complete"]:
+                return jsonify({"error": "Team is already confirmed."}), 400
+
+            event_id = team["event_id"]
+            cursor.execute("SELECT * FROM events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+
+            # Count accepted members
+            cursor.execute(
+                "SELECT COUNT(*) AS cnt FROM team_members WHERE team_id = %s AND status = 'accepted'",
+                (team_id,)
+            )
+            accepted_count = cursor.fetchone()["cnt"]
+
+            if accepted_count < event["min_members"] - 1:
+                return jsonify({
+                    "error": f"Need at least {event['min_members'] - 1} accepted members. Currently have {accepted_count}."
+                }), 400
+
+            # Get the full list of emails to register (Leader + Accepted Members)
+            cursor.execute(
+                "SELECT email FROM team_members WHERE team_id = %s AND status = 'accepted'",
+                (team_id,)
+            )
+            accepted_members = cursor.fetchall()
+            emails_to_register = [user_email] + [m["email"] for m in accepted_members]
+
+            # ADD THIS PRE-FLIGHT CHECK:
+            for email in emails_to_register:
+                cursor.execute("SELECT id FROM registrations WHERE email = %s AND event_id = %s", (email, event_id))
+                if cursor.fetchone():
+                    return jsonify({"error": f"Conflict: {email} was just registered elsewhere."}), 409
+
+            # Now safe to mark team as complete
+            now = datetime.now(timezone.utc)
+            cursor.execute("UPDATE teams SET is_complete = TRUE WHERE id = %s", (team_id,))
+
+            # Execute all insertions safely
+            for email in emails_to_register:
+                cursor.execute(
+                    "INSERT INTO registrations (email, event_id, registered_at, is_team_registration, team_id) VALUES (%s, %s, %s, TRUE, %s)",
+                    (email, event_id, now, team_id)
+                )
+
+            # Dismiss remaining pending invites
+            cursor.execute(
+                "UPDATE team_members SET status = 'expired', responded_at = %s WHERE team_id = %s AND status = 'pending'",
+                (now, team_id)
+            )
+
+            conn.commit()
+
+        return jsonify({"message": "Team registration confirmed!", "redirect": url_for("dashboard")})
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 6. POST /team/<team_id>/cancel — Cancel (delete) incomplete team
+# ---------------------------------------------------------------------------
+@app.route("/team/<int:team_id>/cancel", methods=["POST"])
+@login_required
+def cancel_team(team_id):
+    user_email = session["user"]["email"]
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM teams WHERE id = %s AND leader_email = %s", (team_id, user_email))
+            team = cursor.fetchone()
+            if not team:
+                return jsonify({"error": "Team not found or you are not the leader."}), 404
+            if team["is_complete"]:
+                return jsonify({"error": "Cannot cancel a confirmed team."}), 400
+
+            # Delete members first (FK cascade should handle it, but be explicit)
+            cursor.execute("DELETE FROM team_members WHERE team_id = %s", (team_id,))
+            cursor.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+            conn.commit()
+
+        return jsonify({"message": "Team cancelled.", "redirect": url_for("dashboard")})
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 7. GET /invites/pending — List pending invites for the logged-in user
+# ---------------------------------------------------------------------------
+@app.route("/invites/pending")
+@login_required
+def pending_invites():
+    user_email = session["user"]["email"]
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            _expire_old_invites(cursor)
+            conn.commit()
+
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=INVITE_EXPIRY_SECONDS)
+            now = datetime.now(timezone.utc)
+
+            cursor.execute("""
+                SELECT tm.id, tm.team_id, tm.status, tm.invited_at,
+                       t.event_id, t.leader_email, t.is_complete,
+                       e.title AS event_title, e.date AS event_date,
+                       e.location AS event_location, e.category AS event_category,
+                       u.name AS leader_name
+                FROM team_members tm
+                JOIN teams t ON tm.team_id = t.id
+                JOIN events e ON t.event_id = e.id
+                LEFT JOIN users u ON t.leader_email = u.email
+                WHERE tm.email = %s
+                  AND tm.status = 'pending'
+                  AND tm.invited_at > %s
+                  AND t.is_complete = FALSE
+                ORDER BY tm.invited_at DESC
+            """, (user_email, cutoff))
+            invites = cursor.fetchall()
+
+            for inv in invites:
+                expires_at = inv["invited_at"].replace(tzinfo=timezone.utc) + timedelta(seconds=INVITE_EXPIRY_SECONDS)
+                inv["expires_at"] = expires_at.isoformat()
+                inv["seconds_remaining"] = max(0, int((expires_at - now).total_seconds()))
+                inv["invited_at"] = inv["invited_at"].replace(tzinfo=timezone.utc).isoformat() if inv["invited_at"] else None
+
+    finally:
+        conn.close()
+
+    # Return JSON if requested via AJAX, otherwise render template
+    if request.headers.get("Accept", "").startswith("application/json") or request.args.get("format") == "json":
+        return jsonify({"invites": invites, "count": len(invites)})
+
+    pending_invite_count = len(invites)
+    return render_template("invitations.html", invites=invites, pending_invite_count=pending_invite_count)
+
+
+# ---------------------------------------------------------------------------
+# 8. POST /invite/<invite_id>/respond — Accept or decline an invite
+# ---------------------------------------------------------------------------
+@app.route("/invite/<int:invite_id>/respond", methods=["POST"])
+@login_required
+def respond_to_invite(invite_id):
+    user_email = session["user"]["email"]
+    data = request.get_json() or {}
+    response_action = data.get("response", "").strip().lower()
+
+    if response_action not in ("accepted", "declined"):
+        return jsonify({"error": "Response must be 'accepted' or 'declined'."}), 400
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            _expire_old_invites(cursor)
+
+            cursor.execute(
+                "SELECT * FROM team_members WHERE id = %s AND email = %s",
+                (invite_id, user_email)
+            )
+            invite = cursor.fetchone()
+            if not invite:
+                return jsonify({"error": "Invite not found."}), 404
+            if invite["status"] != "pending":
+                return jsonify({"error": "This invite is no longer pending."}), 400
+
+            # Check if expired
+            expires_at = invite["invited_at"].replace(tzinfo=timezone.utc) + timedelta(seconds=INVITE_EXPIRY_SECONDS)
+            now = datetime.now(timezone.utc)
+            if now > expires_at:
+                cursor.execute(
+                    "UPDATE team_members SET status = 'expired', responded_at = %s WHERE id = %s",
+                    (now, invite_id)
+                )
+                conn.commit()
+                return jsonify({"error": "This invite has expired."}), 400
+
+            team_id = invite["team_id"]
+
+            # Get the team to find event_id
+            cursor.execute("SELECT * FROM teams WHERE id = %s", (team_id,))
+            team = cursor.fetchone()
+            if not team or team["is_complete"]:
+                return jsonify({"error": "Team is no longer available."}), 400
+
+            event_id = team["event_id"]
+
+            if response_action == "accepted":
+                # ADD THIS NEW CAPACITY CHECK:
+                cursor.execute("SELECT max_members FROM events WHERE id = %s", (event_id,))
+                max_members = cursor.fetchone()["max_members"]
+                
+                cursor.execute(
+                    "SELECT COUNT(*) AS cnt FROM team_members WHERE team_id = %s AND status = 'accepted'", 
+                    (team_id,)
+                )
+                accepted_count = cursor.fetchone()["cnt"]
+                
+                if accepted_count + 1 >= max_members: # +1 accounts for the leader
+                    return jsonify({"error": "This team is already full."}), 403
+
+                cursor.execute(
+                    "SELECT id FROM teams WHERE leader_email = %s AND event_id = %s AND is_complete = FALSE", 
+                    (user_email, event_id)
+                )
+                if cursor.fetchone():
+                    return jsonify({"error": "You cannot accept this invite because you are leading another team for this event."}), 400
+
+                # Check user hasn't already accepted another team for same event
+                cursor.execute("""
+                    SELECT tm.* FROM team_members tm
+                    JOIN teams t ON tm.team_id = t.id
+                    WHERE tm.email = %s AND t.event_id = %s AND tm.status = 'accepted'
+                      AND tm.id != %s
+                """, (user_email, event_id, invite_id))
+                if cursor.fetchone():
+                    return jsonify({"error": "You have already accepted another team for this event."}), 400
+
+                # Accept this invite
+                cursor.execute(
+                    "UPDATE team_members SET status = 'accepted', responded_at = %s WHERE id = %s",
+                    (now, invite_id)
+                )
+
+                # Add +2 (1 for the leader, 1 for the user who just accepted this invite)
+                if accepted_count + 2 >= max_members:
+                    cursor.execute(
+                        "UPDATE team_members SET status = 'expired', responded_at = %s WHERE team_id = %s AND status = 'pending'",
+                        (now, team_id)
+                    )
+
+            elif response_action == "declined":
+                cursor.execute(
+                    "UPDATE team_members SET status = 'declined', responded_at = %s WHERE id = %s",
+                    (now, invite_id)
+                )
+
+                # Set 2-minute cooldown for the leader to re-invite this user
+                leader_email = team["leader_email"]
+                cooldown_until = now + timedelta(seconds=DECLINE_COOLDOWN_SECONDS)
+                cursor.execute(
+                    "INSERT INTO invite_cooldowns (leader_email, invitee_email, event_id, cooldown_until) VALUES (%s, %s, %s, %s)",
+                    (leader_email, user_email, event_id, cooldown_until)
+                )
+
+            conn.commit()
+
+        return jsonify({"message": f"Invite {response_action}.", "status": response_action})
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 9. GET /users/search — Search users by name or student ID
+# ---------------------------------------------------------------------------
+@app.route("/users/search")
+@login_required
+def search_users():
+    query = request.args.get("q", "").strip()
+    event_id = request.args.get("event_id", "").strip()
+    team_id = request.args.get("team_id", "").strip()
+    
+    if len(query) < 2 or not event_id or not team_id:
+        return jsonify({"users": []})
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            search_term = f"%{query}%"
+            cursor.execute("""
+                SELECT name, email, student_id, department
+                FROM users
+                WHERE (name LIKE %s OR student_id LIKE %s)
+                  AND email != %s
+                  AND email NOT IN (
+                      SELECT email FROM registrations WHERE event_id = %s
+                  )
+                  AND email NOT IN (
+                      SELECT leader_email FROM teams WHERE event_id = %s AND is_complete = FALSE
+                  )
+                  AND email NOT IN (
+                      SELECT tm.email FROM team_members tm
+                      JOIN teams t ON tm.team_id = t.id
+                      WHERE t.event_id = %s AND tm.status = 'accepted'
+                  )
+                ORDER BY name ASC
+                LIMIT 10
+            """, (search_term, search_term, session["user"]["email"], event_id, event_id, event_id))
+            users = cursor.fetchall()
+
+        return jsonify({"users": users})
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0',debug=True, port=5000)

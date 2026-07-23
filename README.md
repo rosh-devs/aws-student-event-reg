@@ -22,7 +22,7 @@
 - Team capacity validation
 - Automatic registration
 
-##AWS Cloud Architecture
+# ☁️ AWS Cloud Architecture
 <img width="1582" height="372" alt="map" src="https://github.com/user-attachments/assets/fe6252e6-77d8-4298-94df-f26632c2d498" />
 ## ☁️ AWS Services Used
 

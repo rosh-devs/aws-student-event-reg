@@ -167,126 +167,157 @@ This workflow prevents duplicate registrations, incomplete teams, and invitation
 
 ---
 
-## 📸 Project Screenshots
-
-### 🔐 User Login
-![Login Page](screenshots/frontend/signin.png)
-
-Secure login page where students authenticate using their registered email address and password.
+# 📸 Project Screenshots
 
 ---
 
-### 📝 User Registration
-![Registration Page](screenshots/frontend/signup.png)
+## ☁️ AWS Cloud Architecture
 
-Students can create an account by entering their personal details and uploading a valid student ID for verification.
+### AWS Architecture Diagram
+
+![AWS Architecture](screenshots/architecture/map.jpeg)
+
+Overall AWS architecture showing the VPC, public/private subnets, Internet Gateway, NAT Gateway, Route Tables, Application Load Balancer, EC2 instance, Amazon RDS, and Amazon S3.
 
 ---
 
-### 🏠 Dashboard
+### EC2 Terminal
+
+![EC2 Terminal](screenshots/architecture/terminakl.jpeg)
+
+SSH connection to the Ubuntu EC2 instance used to deploy and manage the EventHub application.
+
+---
+
+# 💻 Frontend
+
+## 🔐 User Login
+
+![Login](screenshots/frontend/sign%20in.png)
+
+Students log in securely using their registered email and password.
+
+---
+
+## 📝 User Registration
+
+![Registration](screenshots/frontend/register%20now.png)
+
+New students create an account and upload their student ID for verification.
+
+---
+
+## 🏠 Dashboard
+
 ![Dashboard](screenshots/frontend/dashboard.png)
 
-The dashboard displays an overview of available events, registered events, and remaining seats for the logged-in student.
+Dashboard displaying registered events, upcoming events, and account information.
 
 ---
 
-### 📅 Browse Events
-![All Events](screenshots/frontend/events.png)
+## 📅 Browse Events
 
-Students can browse all upcoming campus events, including event category, date, venue, and available seats.
+![Events](screenshots/frontend/events.png)
 
----
-
-### 🎟️ Event Registration
-![Register Event](screenshots/frontend/register-event.png)
-
-Students can select an event and register individually or initiate team registration for group events.
+Students can browse available campus events and register with a single click.
 
 ---
 
-### 👥 My Events
-![My Events](screenshots/frontend/my-events.png)
+## ➕ Create Event
 
-Displays all events the student has successfully registered for, with options to manage registrations before deadlines.
+![Create Event](screenshots/frontend/create.png)
 
----
-
-## ☁️ AWS Deployment Screenshots
-
-### 🏗️ VPC Configuration
-![VPC](screenshots/backend/vpc.png)
-
-Custom Amazon VPC configured with a CIDR block of **10.0.0.0/16** to provide a secure and isolated network for the EventHub application.
+Administrators can create and publish new student events.
 
 ---
 
-### 🗺️ VPC Resource Map
-![Resource Map](screenshots/backend/resource-map.png)
+## 📋 My Events
 
-Shows the complete VPC architecture including public/private subnets, route tables, Internet Gateway, and NAT Gateway.
+![My Events](screenshots/frontend/my%20events.png)
 
----
-
-### 🌐 Subnet Configuration
-![Subnets](screenshots/backend/subnets.png)
-
-Two public and two private subnets deployed across multiple Availability Zones to improve availability and security.
+Displays all events registered by the logged-in student.
 
 ---
 
-### 🚪 Internet Gateway & Route Tables
-![Route Table](screenshots/backend/route-table.png)
+# ☁️ AWS Backend Infrastructure
 
-Configured routing rules to provide internet access to public subnets through the Internet Gateway while maintaining secure routing for private resources.
+## Amazon VPC
 
----
+![VPC](screenshots/backend/vpc.jpeg)
 
-### 🔄 NAT Gateway
-![NAT Gateway](screenshots/backend/nat-gateway.png)
-
-Allows instances within private subnets to securely access the internet for software updates without exposing them to inbound traffic.
+Custom VPC configured to securely isolate all AWS resources.
 
 ---
 
-### 🖥️ EC2 Instance
-![EC2](screenshots/backend/ec2.png)
+## Subnets
 
-Amazon EC2 instance hosting the Flask-based EventHub web application.
+![Subnets](screenshots/backend/subnets.jpeg)
 
----
-
-### 💻 SSH Access
-![SSH Terminal](screenshots/backend/ssh-terminal.png)
-
-Successful SSH connection to the EC2 instance used for deployment, configuration, and application management.
+Public and private subnets distributed across multiple Availability Zones.
 
 ---
 
-### ⚖️ Application Load Balancer
-![Load Balancer](screenshots/backend/load-balancer.png)
+## Route Tables
 
-Application Load Balancer distributes incoming HTTP requests and improves application availability and scalability.
+![Route Tables](screenshots/backend/routing%20table.jpeg)
 
----
-
-### 🗄️ Amazon RDS (MySQL)
-![Amazon RDS](screenshots/backend/rds.png)
-
-Amazon RDS MySQL database deployed within private subnets to securely store application data including users, events, teams, and registrations.
+Routing configuration for Internet Gateway and NAT Gateway connectivity.
 
 ---
 
-### 📦 Amazon S3 Bucket
-![Amazon S3](screenshots/backend/s3.png)
+## Security Groups
 
-Amazon S3 bucket used to securely store uploaded student identity documents and other application assets.
+![Security Groups](screenshots/backend/security%20group.jpeg)
+
+Firewall rules controlling inbound and outbound traffic for AWS resources.
 
 ---
 
-### 🔒 Security Groups
-![Security Groups](screenshots/backend/security-groups.png)
+## EC2 Instance
 
-Security Groups configured to control inbound and outbound traffic between the Load Balancer, EC2 instance, and Amazon RDS database.
+![EC2](screenshots/backend/EC2.jpeg)
+
+Ubuntu EC2 instance hosting the Flask EventHub application.
+
+---
+
+## Application Load Balancer
+
+![Load Balancer](screenshots/backend/load%20balancer.jpeg)
+
+Application Load Balancer distributing incoming HTTP requests.
+
+---
+
+## Amazon RDS Database
+
+![Database](screenshots/backend/database.jpeg)
+
+Amazon RDS MySQL database storing application data securely inside the private subnet.
+
+---
+
+## Amazon S3 Bucket
+
+![S3 Bucket](screenshots/backend/bucket.jpeg)
+
+Amazon S3 bucket used for storing uploaded student documents.
+
+---
+
+## S3 Objects
+
+![Objects](screenshots/backend/objects.jpeg)
+
+Uploaded files stored inside the S3 bucket.
+
+---
+
+## NAT Gateway
+
+![NAT Gateway](screenshots/backend/nat.jpeg)
+
+NAT Gateway enabling outbound internet connectivity for private subnet resources.
 ## 📂 Project Structure
 
 ```text

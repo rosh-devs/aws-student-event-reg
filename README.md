@@ -24,6 +24,7 @@
 
 # ☁️ AWS Cloud Architecture
 <img width="1582" height="372" alt="map" src="https://github.com/user-attachments/assets/fe6252e6-77d8-4298-94df-f26632c2d498" />
+
 ## ☁️ AWS Services Used
 
 | AWS Service | Purpose in the Project |
@@ -40,6 +41,7 @@
 | Amazon RDS (MySQL) | Stored application data including users, events, registrations, invitations, and team information. |
 | IAM | Managed user permissions, roles, and secure access to AWS resources and services. |
 | Application Load Balancer (ALB) | Distributed incoming HTTP requests across the application instances to improve availability and reliability. |
+
 ## 🏗️ AWS Infrastructure
 
 The EventHub application is deployed within a custom AWS Virtual Private Cloud (VPC), following a secure and scalable multi-tier architecture. The infrastructure consists of:
